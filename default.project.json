@@ -1,0 +1,300 @@
+{
+  "name": "VibeGame",
+  "tree": {
+    "$className": "DataModel",
+
+    "ReplicatedStorage": {
+      "Shared": {
+        "$path": "src/shared"
+      }
+    },
+
+    "ServerScriptService": {
+      "$path": "src/server"
+    },
+
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "Client": {
+          "$path": "src/client"
+        }
+      }
+    },
+
+    "Workspace": {
+      "$properties": {
+        "FilteringEnabled": true
+      },
+      "Baseplate": {
+        "$className": "Part",
+        "$properties": {
+          "Anchored": true,
+          "Color": [
+            0.38823,
+            0.37254,
+            0.38823
+          ],
+          "Locked": true,
+          "Position": [
+            0,
+            -10,
+            0
+          ],
+          "Size": [
+            512,
+            20,
+            512
+          ]
+        }
+      },
+      "ClickPart": {
+        "$className": "Part",
+        "$properties": {
+          "Name": "ClickPart",
+          "Anchored": true,
+          "Position": [
+            10,
+            5,
+            0
+          ],
+          "Color": [1, 0.8, 0]
+        }
+      },
+      "LeaderboardPart": {
+        "$className": "Part",
+        "$properties": {
+          "Name": "LeaderboardPart",
+          "Anchored": true,
+          "Position": [0, 12, 25],
+          "Size": [16, 10, 1],
+          "Color": [0.1, 0.1, 0.1],
+          "Material": "Metal",
+          "TopSurface": "Smooth",
+          "BottomSurface": "Smooth"
+        }
+      },
+      "Classroom": {
+        "$className": "Folder",
+        "Floor": {
+          "$className": "Part",
+          "$properties": {
+            "Anchored": true,
+            "Position": [0, 20, -100],
+            "Size": [50, 2, 50],
+            "Color": [0.3, 0.6, 0.3],
+            "Material": "Grass"
+          }
+        },
+        "Blackboard": {
+          "$className": "Part",
+          "$properties": {
+            "Name": "Blackboard",
+            "Anchored": true,
+            "Position": [0, 28.5, -118],
+            "Size": [16, 8, 1],
+            "Color": [0.1, 0.1, 0.1],
+            "Material": "Slate"
+          }
+        },
+        "WallBack": {
+          "$className": "Part",
+          "$properties": {
+            "Anchored": true,
+            "Position": [0, 31, -120],
+            "Size": [40, 20, 1],
+            "Color": [0.8, 0.75, 0.6],
+            "Material": "SmoothPlastic"
+          }
+        },
+        "WallFront": {
+          "$className": "Part",
+          "$properties": {
+            "Anchored": true,
+            "Position": [0, 31, -80],
+            "Size": [40, 20, 1],
+            "Color": [0.8, 0.75, 0.6],
+            "Material": "SmoothPlastic"
+          }
+        },
+        "WallLeft": {
+          "$className": "Part",
+          "$properties": {
+            "Anchored": true,
+            "Position": [-20, 31, -100],
+            "Size": [1, 20, 40],
+            "Color": [0.8, 0.75, 0.6],
+            "Material": "SmoothPlastic"
+          }
+        },
+        "WallRight": {
+          "$className": "Part",
+          "$properties": {
+            "Anchored": true,
+            "Position": [20, 31, -100],
+            "Size": [1, 20, 40],
+            "Color": [0.8, 0.75, 0.6],
+            "Material": "SmoothPlastic"
+          }
+        },
+        "Ceiling": {
+          "$className": "Part",
+          "$properties": {
+            "Anchored": true,
+            "Position": [0, 41.5, -100],
+            "Size": [40, 1, 40],
+            "Color": [0.8, 0.8, 0.8],
+            "Material": "Concrete"
+          }
+        },
+        "ClassroomLight": {
+          "$className": "Part",
+          "$properties": {
+            "Anchored": true,
+            "Position": [0, 41, -100],
+            "Size": [4, 0.5, 8],
+            "Color": [1, 1, 1],
+            "Material": "Neon"
+          },
+          "Light": {
+            "$className": "PointLight",
+            "$properties": {
+              "Range": 30,
+              "Brightness": 1.5
+            }
+          }
+        },
+        "AnswerPadCorrect": {
+          "$className": "Part",
+          "$properties": {
+            "Name": "AnswerPadCorrect",
+            "Anchored": true,
+            "Position": [-10, 21.1, -105],
+            "Size": [10, 0.2, 10],
+            "Color": [0.18, 0.8, 0.44],
+            "Material": "Neon"
+          }
+        },
+        "AnswerPadWrong": {
+          "$className": "Part",
+          "$properties": {
+            "Name": "AnswerPadWrong",
+            "Anchored": true,
+            "Position": [10, 21.1, -105],
+            "Size": [10, 0.2, 10],
+            "Color": [0.9, 0.3, 0.23],
+            "Material": "Neon"
+          }
+        },
+        "Furniture": {
+          "$className": "Folder",
+          "Desk1": {
+            "$className": "Part",
+            "$properties": {
+              "Name": "Desk",
+              "Anchored": true,
+              "Position": [-8, 22, -92],
+              "Size": [5, 3, 2.5],
+              "Color": [0.55, 0.4, 0.25],
+              "Material": "Wood"
+            }
+          },
+          "Chair1": {
+            "$className": "Part",
+            "$properties": {
+              "Name": "Chair",
+              "Anchored": true,
+              "Position": [-8, 21.25, -89.5],
+              "Size": [2.5, 1.5, 2.5],
+              "Color": [0.45, 0.3, 0.15],
+              "Material": "Wood"
+            }
+          },
+          "Desk2": {
+            "$className": "Part",
+            "$properties": {
+              "Name": "Desk",
+              "Anchored": true,
+              "Position": [8, 22, -92],
+              "Size": [5, 3, 2.5],
+              "Color": [0.55, 0.4, 0.25],
+              "Material": "Wood"
+            }
+          },
+          "Chair2": {
+            "$className": "Part",
+            "$properties": {
+              "Name": "Chair",
+              "Anchored": true,
+              "Position": [8, 21.25, -89.5],
+              "Size": [2.5, 1.5, 2.5],
+              "Color": [0.45, 0.3, 0.15],
+              "Material": "Wood"
+            }
+          },
+          "Desk3": {
+            "$className": "Part",
+            "$properties": {
+              "Name": "Desk",
+              "Anchored": true,
+              "Position": [-8, 22, -85],
+              "Size": [5, 3, 2.5],
+              "Color": [0.55, 0.4, 0.25],
+              "Material": "Wood"
+            }
+          },
+          "Chair3": {
+            "$className": "Part",
+            "$properties": {
+              "Name": "Chair",
+              "Anchored": true,
+              "Position": [-8, 21.25, -82.5],
+              "Size": [2.5, 1.5, 2.5],
+              "Color": [0.45, 0.3, 0.15],
+              "Material": "Wood"
+            }
+          },
+          "Desk4": {
+            "$className": "Part",
+            "$properties": {
+              "Name": "Desk",
+              "Anchored": true,
+              "Position": [8, 22, -85],
+              "Size": [5, 3, 2.5],
+              "Color": [0.55, 0.4, 0.25],
+              "Material": "Wood"
+            }
+          },
+          "Chair4": {
+            "$className": "Part",
+            "$properties": {
+              "Name": "Chair",
+              "Anchored": true,
+              "Position": [8, 21.25, -82.5],
+              "Size": [2.5, 1.5, 2.5],
+              "Color": [0.45, 0.3, 0.15],
+              "Material": "Wood"
+            }
+          }
+        }
+      }
+    },
+    "Lighting": {
+      "$properties": {
+        "Ambient": [
+          0,
+          0,
+          0
+        ],
+        "Brightness": 2,
+        "GlobalShadows": true,
+        "Outlines": false,
+        "Technology": "Voxel"
+      }
+    },
+    "SoundService": {
+      "$properties": {
+        "RespectFilteringEnabled": true
+      }
+    }
+  }
+}
