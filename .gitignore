@@ -1,8 +1,15 @@
-# Project place file
-/VibeGame.rbxlx
+# Rojo build output
+*.rbxlx
+*.rbxl
+build/
 
 # Roblox Studio lock files
-/*.rbxlx.lock
-/*.rbxl.lock
+*.rbxlx.lock
+*.rbxl.lock
 
+# Roblox Studio auto-saves
+*.rbxlx-autosave.*
+*.rbxl-autosave.*
+
+# Rojo sourcemap
 sourcemap.json
