@@ -6,7 +6,7 @@ local PART_NAME = "ClickPart"
 local SOUND_ID = "rbxassetid://12221967" -- 範例音效 ID (Coin sound)，你可以換成你喜歡的
 local REWARD_AMOUNT = 50
 
-local clickPart = Workspace:WaitForChild(PART_NAME, 5) -- 等待最多 5 秒
+local clickPart = Workspace:WaitForChild(PART_NAME) -- 無限等待，直到 MapSetup 建立它
 
 if not clickPart then
 	warn("警告: 找不到 ClickPart！")

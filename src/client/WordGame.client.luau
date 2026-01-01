@@ -22,15 +22,16 @@ screenGui.Name = "WordGameGui"
 screenGui.ResetOnSpawn = false -- 防止玩家重生後音樂與介面消失
 screenGui.Parent = playerGui
 
--- 開始按鈕
+-- 開始按鈕 (進入區域後顯示)
 local startButton = Instance.new("TextButton")
-startButton.Size = UDim2.new(0, 150, 0, 50)
-startButton.Position = UDim2.new(0.5, -75, 0.85, 0) -- 畫面下方
+startButton.Size = UDim2.new(0, 200, 0, 60)
+startButton.Position = UDim2.new(0.5, -100, 0.8, 0) -- 畫面下方
 startButton.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
 startButton.TextColor3 = Color3.new(1, 1, 1)
 startButton.Font = Enum.Font.GothamBold
-startButton.TextSize = 20
-startButton.Text = "開始單字挑戰"
+startButton.TextSize = 24
+startButton.Text = "開始遊戲"
+startButton.Visible = false
 startButton.Parent = screenGui
 
 -- 尋找黑板零件
@@ -39,6 +40,51 @@ local blackboardPart = classroom:WaitForChild("Blackboard")
 local padCorrect = classroom:WaitForChild("AnswerPadCorrect")
 local padWrong = classroom:WaitForChild("AnswerPadWrong")
 local floor = classroom:WaitForChild("Floor") -- 關鍵修正：確保地板存在才開始
+
+-- [DEBUG] 列出 Workspace 所有物件，確認同步狀態
+print(">>> [DEBUG] Workspace Children List:")
+for _, child in ipairs(Workspace:GetChildren()) do
+	print(" - " .. child.Name .. " (" .. child.ClassName .. ")")
+end
+
+local startZone = Workspace:WaitForChild("WordGameZone") -- 改名為 WordGameZone
+print("✅ [CLIENT] 找到開始區域:", startZone.Name)
+local leaderboardPart = Workspace:WaitForChild("WordGameRank") -- 改名為 WordGameRank
+print("✅ [CLIENT] 找到排行榜:", leaderboardPart.Name)
+local gameSign = Workspace:WaitForChild("WordGameSign", 5) -- 改名為 WordGameSign
+if gameSign then print("✅ [CLIENT] 找到告示牌:", gameSign.Name) end
+
+-- [DEBUG] 初始位置檢查 (確認物件狀態)
+print("--------------------------------------------------")
+print(string.format(">>> [DEBUG] WordGameZone: %s | Size: %s | Transparency: %.1f | Parent: %s", tostring(startZone.Position), tostring(startZone.Size), startZone.Transparency, tostring(startZone.Parent)))
+print(string.format(">>> [DEBUG] WordGameRank: %s | Size: %s | Transparency: %.1f | Parent: %s", tostring(leaderboardPart.Position), tostring(leaderboardPart.Size), leaderboardPart.Transparency, tostring(leaderboardPart.Parent)))
+print(string.format(">>> [DEBUG] Classroom Floor: %s", tostring(floor.Position)))
+
+local baseplate = Workspace:FindFirstChild("Baseplate")
+if baseplate then
+	print(string.format(">>> [DEBUG] Baseplate Position: %s | Size: %s", tostring(baseplate.Position), tostring(baseplate.Size)))
+end
+
+if gameSign then
+	print(string.format(">>> [DEBUG] WordGameSign: %s | Parent: %s", tostring(gameSign.Position), tostring(gameSign.Parent)))
+	local gui = gameSign:FindFirstChild("SignGui")
+	if gui then
+		print(string.format(">>> [DEBUG] SignGui found. Face: %s, Enabled: %s", tostring(gui.Face), tostring(gui.Enabled)))
+		local label = gui:FindFirstChild("TextLabel")
+		if label then
+			print(string.format(">>> [DEBUG] TextLabel found. Text: '%s', Visible: %s, Transparency: %.1f, Size: %s", label.Text, tostring(label.Visible), label.TextTransparency, tostring(label.Size)))
+		else
+			warn(">>> [DEBUG] 警告: SignGui 裡面找不到 TextLabel")
+		end
+	else
+		warn(">>> [DEBUG] 警告: WordGameSign 裡面找不到 SignGui")
+	end
+else
+	warn(">>> [DEBUG] 警告: 找不到 WordGameSign (告示牌)！")
+end
+print("--------------------------------------------------")
+
+local startPrompt = startZone:WaitForChild("InteractPrompt") -- 取得 ProximityPrompt (改名後)
 
 -- 建立黑板介面 (SurfaceGui)
 local surfaceGui = Instance.new("SurfaceGui")
@@ -91,13 +137,26 @@ struggleLabel.Text = "連按空白鍵站起來！"
 struggleLabel.Visible = false
 struggleLabel.Parent = screenGui
 
+-- 掙扎按鈕 (手機版/滑鼠點擊用)
+local struggleButton = Instance.new("TextButton")
+struggleButton.Size = UDim2.new(0, 200, 0, 60)
+struggleButton.Position = UDim2.new(0.5, -100, 0.75, 0) -- 位於提示文字下方
+struggleButton.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
+struggleButton.TextColor3 = Color3.new(1, 1, 1)
+struggleButton.Font = Enum.Font.GothamBold
+struggleButton.TextSize = 24
+struggleButton.Text = "點擊掙扎！"
+struggleButton.ZIndex = 10 -- 確保按鈕在最上層
+struggleButton.Visible = false
+struggleButton.Parent = screenGui
+
 -- 音效設定
 local soundCorrect = Instance.new("Sound")
-soundCorrect.SoundId = "rbxassetid://4612375233" -- 正確音效
+soundCorrect.SoundId = "rbxassetid://131886985" -- 正確音效 (Coin)
 soundCorrect.Parent = screenGui
 
 local soundWrong = Instance.new("Sound")
-soundWrong.SoundId = "rbxassetid://4612377476" -- 錯誤音效
+soundWrong.SoundId = "rbxassetid://130972023" -- 錯誤音效 (Error)
 soundWrong.Parent = screenGui
 
 -- 彈飛音效
@@ -105,23 +164,14 @@ local soundFling = Instance.new("Sound")
 soundFling.SoundId = "rbxassetid://12222084" -- 卡通彈跳音效
 soundFling.Parent = screenGui
 
--- 背景音樂
-local bgm = Instance.new("Sound")
-bgm.SoundId = "rbxassetid://1835386694" -- 輕快背景音樂
-bgm.Looped = true
-bgm.Volume = 0.5
-bgm.Parent = screenGui
--- bgm:Play() -- 改到開始遊戲時播放
-
 -- 3. 遊戲邏輯
 local currentRound = 0
 local maxRounds = 10
 local currentAnswerIsMatch = false -- 題目是否正確匹配
 local answerChosen = false
 local currentStreak = 0 -- 本地端記錄連勝 (用於 UI 顯示)
-local savedJumpPower = 50 -- 儲存原本的跳躍力
-local savedJumpHeight = 7.2
 local struggleConnection = nil -- 追蹤按鍵事件，防止重複綁定
+local struggleButtonConnection = nil -- 追蹤按鈕事件
 
 local gameRunning = false
 local safetyConnection = nil
@@ -160,11 +210,28 @@ local function endGame()
 		struggleConnection:Disconnect() 
 		struggleConnection = nil
 	end
+	if struggleButtonConnection then
+		struggleButtonConnection:Disconnect()
+		struggleButtonConnection = nil
+	end
 	struggleLabel.Visible = false
+	struggleButton.Visible = false
 	
+	-- 強制解除掙扎狀態 (修復遊戲結束時卡在跌倒狀態的 Bug)
+	local char = player.Character
+	if char then
+		local hum = char:FindFirstChild("Humanoid")
+		if hum then
+			hum.Sit = false -- 站起來
+			hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, true) -- 恢復跳躍能力
+		end
+	end
+
 	surfaceGui.Enabled = false -- 隱藏黑板內容
-	startButton.Visible = true
-	startButton.Text = "遊戲結束！再玩一次"
+	startPrompt.Enabled = true -- 重新啟用提示
+	if startPrompt then
+		startPrompt.Enabled = true -- 重新啟用提示
+	end
 	remote:FireServer("EndGame")
 end
 
@@ -204,12 +271,6 @@ local function handleAnswer(playerChoice) -- playerChoice: true=選正確, false
 			local hrp = char:FindFirstChild("HumanoidRootPart")
 			local hum = char:FindFirstChild("Humanoid")
 			if hrp and hum then
-				-- 如果當前跳躍力正常 (>0)，才更新儲存值；否則沿用之前的紀錄 (避免存到 0)
-				if hum.JumpPower > 0 then
-					savedJumpPower = hum.JumpPower
-					savedJumpHeight = hum.JumpHeight
-				end
-
 				soundFling:Play()
 				hum.Sit = true -- 強制坐下 (跌倒效果)
 				-- 給予隨機方向的瞬間速度 (彈飛效果)
@@ -218,37 +279,50 @@ local function handleAnswer(playerChoice) -- playerChoice: true=選正確, false
 				-- 掙扎機制：連按空白鍵站起來
 				local requiredPresses = 5
 				local presses = 0
-				
-				-- 暫時禁用跳躍 (防止按一下就站起來)
-				hum.JumpPower = 0
-				hum.JumpHeight = 0
+
+				-- 暫時禁用跳躍狀態 (這會隱藏手機原生跳躍鈕，所以我們顯示自訂按鈕)
+				hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
 				
 				struggleLabel.Visible = true
-				struggleLabel.Text = "連按空白鍵站起來！"
+				struggleLabel.Text = "連按按鈕站起來！"
+				print(">>> [DEBUG] 顯示掙扎按鈕")
+				struggleButton.Visible = true
 				
 				-- 清除舊的連線，防止多重觸發
 				if struggleConnection then struggleConnection:Disconnect() end
+				if struggleButtonConnection then struggleButtonConnection:Disconnect() end
 				
-				struggleConnection = UserInputService.InputBegan:Connect(function(input, processed)
-					if input.KeyCode == Enum.KeyCode.Space and not processed then
-						presses += 1
+				local lastAttempt = 0
+				local function attemptStandUp()
+					local now = os.clock()
+					if now - lastAttempt < 0.15 then return end -- 防止按住跳躍鍵瞬間完成
+					lastAttempt = now
+
+					presses += 1
+					
+					-- 文字震動效果
+					struggleLabel.Position = UDim2.new(0.5, -200 + math.random(-5, 5), 0.65, math.random(-5, 5))
+					
+					if presses >= requiredPresses then
+						if struggleConnection then struggleConnection:Disconnect() end
+						if struggleButtonConnection then struggleButtonConnection:Disconnect() end
+						struggleConnection = nil
+						struggleButtonConnection = nil
 						
-						-- 文字震動效果
-						struggleLabel.Position = UDim2.new(0.5, -200 + math.random(-5, 5), 0.65, math.random(-5, 5))
-						
-						if presses >= requiredPresses then
-							if struggleConnection then struggleConnection:Disconnect() end
-							struggleConnection = nil
-							if hum and hum.Parent then
-								hum.Sit = false -- 站起來
-								hum.JumpPower = savedJumpPower -- 恢復正確的跳躍力
-								hum.JumpHeight = savedJumpHeight
-							end
-							struggleLabel.Visible = false
-							struggleLabel.Position = UDim2.new(0.5, -200, 0.65, 0) -- 重置位置
+						if hum and hum.Parent then
+							hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, true) -- 恢復跳躍能力
+							hum.Sit = false -- 站起來
 						end
+						struggleLabel.Visible = false
+						struggleButton.Visible = false
+						struggleLabel.Position = UDim2.new(0.5, -200, 0.65, 0) -- 重置位置
 					end
-				end)
+				end
+				
+				-- 改用 JumpRequest，這樣手機的跳躍按鈕也能觸發掙扎
+				struggleConnection = UserInputService.JumpRequest:Connect(attemptStandUp)
+				
+				struggleButtonConnection = struggleButton.MouseButton1Click:Connect(attemptStandUp)
 			end
 		end
 	end
@@ -315,10 +389,11 @@ end
 padCorrect.Touched:Connect(function(hit) onPadTouch(hit, true) end)
 padWrong.Touched:Connect(function(hit) onPadTouch(hit, false) end)
 
-startButton.MouseButton1Click:Connect(function()
-	startButton.Text = "載入題目中..."
-	task.wait() -- 強制更新 UI 顯示
+local function startGameSession()
+	if gameRunning then return end
 	
+	if startPrompt then startPrompt.Enabled = false end
+
 	task.wait(0.5) -- 稍微等待伺服器準備
 	gameRunning = true
 	startSafetyCheck()
@@ -329,13 +404,42 @@ startButton.MouseButton1Click:Connect(function()
 	-- 向伺服器請求 10 個隨機翻譯好的單字
 	wordList = getWordListFunc:InvokeServer()
 	
-	if not bgm.Playing then
-		bgm:Play()
-	end
-
-	startButton.Visible = false
 	surfaceGui.Enabled = true
 	currentRound = 0
 	currentStreak = 0 -- 重置連勝
 	nextQuestion()
+end
+
+startButton.MouseButton1Click:Connect(startGameSession)
+
+-- 支援按 E 觸發
+if startPrompt then
+	startPrompt.Triggered:Connect(startGameSession)
+end
+
+local lastDebugTime = 0
+
+-- 區域偵測：控制開始按鈕的顯示
+RunService.Heartbeat:Connect(function()
+	if gameRunning then
+		startButton.Visible = false
+		return
+	end
+
+	local char = player.Character
+	if char then
+		local hrp = char:FindFirstChild("HumanoidRootPart")
+		if hrp then
+			local playerPos = Vector3.new(hrp.Position.X, 0, hrp.Position.Z)
+			local zonePos = Vector3.new(startZone.Position.X, 0, startZone.Position.Z)
+			local dist = (playerPos - zonePos).Magnitude
+			
+			if os.clock() - lastDebugTime > 1 then
+				lastDebugTime = os.clock()
+				print(string.format(">>> [DEBUG] 距離開始區: %.2f | 顯示按鈕: %s", dist, tostring(dist <= 8)))
+			end
+			
+			startButton.Visible = (dist <= 8) -- 距離 8 單位內顯示按鈕
+		end
+	end
 end)

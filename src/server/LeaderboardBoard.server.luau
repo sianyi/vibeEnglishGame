@@ -2,14 +2,15 @@ local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 
-local BOARD_PART_NAME = "LeaderboardPart"
+local BOARD_PART_NAME = "WordGameRank"
 local boardPart = Workspace:WaitForChild(BOARD_PART_NAME)
+print("✅ [SERVER] 排行榜看板已載入:", boardPart.Name)
 
 -- 1. 建立 SurfaceGui (顯示介面)
 local surfaceGui = Instance.new("SurfaceGui")
 surfaceGui.Face = Enum.NormalId.Front -- 顯示在正面
 surfaceGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-surfaceGui.PixelsPerStud = 40 -- 解析度設定
+surfaceGui.PixelsPerStud = 20 -- 解析度設定 (降低數值讓文字看起來更大)
 surfaceGui.Parent = boardPart
 
 -- 背景
