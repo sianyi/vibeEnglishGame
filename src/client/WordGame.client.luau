@@ -34,31 +34,20 @@ startButton.Text = "開始遊戲"
 startButton.Visible = false
 startButton.Parent = screenGui
 
--- 尋找黑板零件
-local classroom = Workspace:WaitForChild("Classroom")
-local blackboardPart = classroom:WaitForChild("Blackboard")
-local padCorrect = classroom:WaitForChild("AnswerPadCorrect")
-local padWrong = classroom:WaitForChild("AnswerPadWrong")
-local floor = classroom:WaitForChild("Floor") -- 關鍵修正：確保地板存在才開始
-
 -- [DEBUG] 列出 Workspace 所有物件，確認同步狀態
 print(">>> [DEBUG] Workspace Children List:")
 for _, child in ipairs(Workspace:GetChildren()) do
 	print(" - " .. child.Name .. " (" .. child.ClassName .. ")")
 end
 
-local startZone = Workspace:WaitForChild("WordGameZone") -- 改名為 WordGameZone
-print("✅ [CLIENT] 找到開始區域:", startZone.Name)
-local leaderboardPart = Workspace:WaitForChild("WordGameRank") -- 改名為 WordGameRank
-print("✅ [CLIENT] 找到排行榜:", leaderboardPart.Name)
-local gameSign = Workspace:WaitForChild("WordGameSign", 5) -- 改名為 WordGameSign
-if gameSign then print("✅ [CLIENT] 找到告示牌:", gameSign.Name) end
+local startZone = Workspace:WaitForChild("WordGameZone")
+local leaderboardPart = Workspace:WaitForChild("WordGameRank")
+local gameSign = Workspace:WaitForChild("WordGameSign", 5)
 
 -- [DEBUG] 初始位置檢查 (確認物件狀態)
 print("--------------------------------------------------")
 print(string.format(">>> [DEBUG] WordGameZone: %s | Size: %s | Transparency: %.1f | Parent: %s", tostring(startZone.Position), tostring(startZone.Size), startZone.Transparency, tostring(startZone.Parent)))
 print(string.format(">>> [DEBUG] WordGameRank: %s | Size: %s | Transparency: %.1f | Parent: %s", tostring(leaderboardPart.Position), tostring(leaderboardPart.Size), leaderboardPart.Transparency, tostring(leaderboardPart.Parent)))
-print(string.format(">>> [DEBUG] Classroom Floor: %s", tostring(floor.Position)))
 
 local baseplate = Workspace:FindFirstChild("Baseplate")
 if baseplate then
@@ -84,45 +73,50 @@ else
 end
 print("--------------------------------------------------")
 
-local startPrompt = startZone:WaitForChild("InteractPrompt") -- 取得 ProximityPrompt (改名後)
+local startPrompt = startZone:WaitForChild("InteractPrompt")
 
--- 建立黑板介面 (SurfaceGui)
+-- 遊戲 UI (預先建立，遊戲開始時再指定 Parent)
 local surfaceGui = Instance.new("SurfaceGui")
-surfaceGui.Face = Enum.NormalId.Back -- 修正朝向，讓玩家看得到
-surfaceGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-surfaceGui.LightInfluence = 0 -- 讓文字自體發光，不受光影影響
-surfaceGui.PixelsPerStud = 50
-surfaceGui.Parent = blackboardPart
-
 local titleLabel = Instance.new("TextLabel")
-titleLabel.Size = UDim2.new(1, 0, 0.15, 0)
-titleLabel.BackgroundTransparency = 1
-titleLabel.TextColor3 = Color3.new(1, 1, 1)
-titleLabel.Font = Enum.Font.GothamBold
-titleLabel.TextSize = 40
-titleLabel.Text = "第 1/10 題"
-titleLabel.Parent = surfaceGui
-
 local questionLabel = Instance.new("TextLabel")
-questionLabel.Size = UDim2.new(1, 0, 0.6, 0)
-questionLabel.Position = UDim2.new(0, 0, 0.2, 0)
-questionLabel.BackgroundTransparency = 1
-questionLabel.TextColor3 = Color3.fromRGB(255, 220, 0)
-questionLabel.Font = Enum.Font.GothamBlack
-questionLabel.TextSize = 60
-questionLabel.TextWrapped = true
-questionLabel.Text = "Apple\n=\n蘋果 ?"
-questionLabel.Parent = surfaceGui
-
 local timerLabel = Instance.new("TextLabel")
-timerLabel.Size = UDim2.new(1, 0, 0.15, 0)
-timerLabel.Position = UDim2.new(0, 0, 0.85, 0)
-timerLabel.BackgroundTransparency = 1
-timerLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-timerLabel.Font = Enum.Font.Gotham
-timerLabel.TextSize = 40
-timerLabel.Text = "剩餘時間: 10"
-timerLabel.Parent = surfaceGui
+
+local function setupGameUI()
+	surfaceGui.Name = "BlackboardGui"
+	surfaceGui.Face = Enum.NormalId.Back
+	surfaceGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	surfaceGui.LightInfluence = 0
+	surfaceGui.PixelsPerStud = 50
+
+	titleLabel.Size = UDim2.new(1, 0, 0.15, 0)
+	titleLabel.BackgroundTransparency = 1
+	titleLabel.TextColor3 = Color3.new(1, 1, 1)
+	titleLabel.Font = Enum.Font.GothamBold
+	titleLabel.TextSize = 40
+	titleLabel.Text = "第 1/10 題"
+	titleLabel.Parent = surfaceGui
+
+	questionLabel.Size = UDim2.new(1, 0, 0.6, 0)
+	questionLabel.Position = UDim2.new(0, 0, 0.2, 0)
+	questionLabel.BackgroundTransparency = 1
+	questionLabel.TextColor3 = Color3.fromRGB(255, 220, 0)
+	questionLabel.Font = Enum.Font.GothamBlack
+	questionLabel.TextSize = 60
+	questionLabel.TextWrapped = true
+	questionLabel.Text = "Apple\n=\n蘋果 ?"
+	questionLabel.Parent = surfaceGui
+
+	timerLabel.Size = UDim2.new(1, 0, 0.15, 0)
+	timerLabel.Position = UDim2.new(0, 0, 0.85, 0)
+	timerLabel.BackgroundTransparency = 1
+	timerLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+	timerLabel.Font = Enum.Font.Gotham
+	timerLabel.TextSize = 40
+	timerLabel.Text = "剩餘時間: 10"
+	timerLabel.Parent = surfaceGui
+end
+
+setupGameUI()
 
 -- 掙扎提示 UI
 local struggleLabel = Instance.new("TextLabel")
@@ -173,6 +167,8 @@ local currentStreak = 0 -- 本地端記錄連勝 (用於 UI 顯示)
 local struggleConnection = nil -- 追蹤按鍵事件，防止重複綁定
 local struggleButtonConnection = nil -- 追蹤按鈕事件
 
+local localClassroom = nil -- 儲存本地教室模型
+
 local gameRunning = false
 local safetyConnection = nil
 
@@ -187,17 +183,10 @@ local function startSafetyCheck()
 		
 		local char = player.Character
 		if char then
+			-- 安全檢查：如果玩家掉出教室範圍，將其傳送回教室中心
 			local hrp = char:FindFirstChild("HumanoidRootPart")
-			
-			-- 動態安全檢查：依據地板位置判斷
-			local floorPos = floor.Position
-			local center2D = Vector3.new(floorPos.X, 0, floorPos.Z)
-			local player2D = Vector3.new(hrp.Position.X, 0, hrp.Position.Z)
-			
-			-- 如果高度低於地板 10 格，或水平距離超過 35 格，視為掉出
-			if hrp and (hrp.Position.Y < (floorPos.Y - 10) or (player2D - center2D).Magnitude > 35) then
-				char:PivotTo(CFrame.new(floorPos.X, floorPos.Y + 5, floorPos.Z) * CFrame.Angles(0, math.rad(180), 0))
-				hrp.AssemblyLinearVelocity = Vector3.zero -- 重置速度
+			if hrp and hrp.Position.Y < 10 then
+				char:PivotTo(CFrame.new(0, 25, -100))
 			end
 		end
 	end)
@@ -217,6 +206,9 @@ local function endGame()
 	struggleLabel.Visible = false
 	struggleButton.Visible = false
 	
+	-- [DEBUG] 增加日誌來檢查 endGame 流程
+	print(">>> [DEBUG] endGame: 開始執行...")
+
 	-- 強制解除掙扎狀態 (修復遊戲結束時卡在跌倒狀態的 Bug)
 	local char = player.Character
 	if char then
@@ -227,12 +219,32 @@ local function endGame()
 		end
 	end
 
-	surfaceGui.Enabled = false -- 隱藏黑板內容
-	startPrompt.Enabled = true -- 重新啟用提示
+	-- 使用 pcall 來安全地銷毀教室，防止錯誤中斷整個函數
+	if localClassroom then
+		print(">>> [DEBUG] endGame: 準備銷毀教室...")
+		local success, err = pcall(function()
+			-- 保護 UI 不被銷毀，以便下一局重複使用
+			surfaceGui.Parent = nil
+			
+			-- 正確的銷毀方式是銷毀 table 中的 model 物件
+			print(">>> [DEBUG] endGame: 正在嘗試 localClassroom.model:Destroy()")
+			localClassroom.model:Destroy()
+			print(">>> [DEBUG] endGame: 教室銷毀成功。")
+		end)
+
+		if not success then
+			warn(">>> [CRITICAL ERROR] 銷毀教室失敗:", err)
+		end
+
+		localClassroom = nil
+	end
+
 	if startPrompt then
 		startPrompt.Enabled = true -- 重新啟用提示
 	end
+	print(">>> [DEBUG] endGame: 準備發送 EndGame 事件到伺服器...")
 	remote:FireServer("EndGame")
+	print(">>> [DEBUG] endGame: EndGame 事件已發送。")
 end
 
 local function handleAnswer(playerChoice) -- playerChoice: true=選正確, false=選錯誤, nil=超時
@@ -375,24 +387,105 @@ local function flashPad(pad)
 	tween:Play()
 end
 
+-- 建立本地獨立教室
+local function createLocalClassroom()
+	local classroom = Instance.new("Model")
+	classroom.Name = "LocalClassroom"
+	
+	local function createPart(name, props)
+		local part = Instance.new("Part")
+		part.Name = name
+		part.Anchored = true
+		for k, v in pairs(props) do
+			part[k] = v
+		end
+		part.Parent = classroom
+		return part
+	end
+
+	-- 建立地板
+	local floor = createPart("Floor", {
+		Position = Vector3.new(0, 20, -100),
+		Size = Vector3.new(50, 2, 50),
+		Color = Color3.fromRGB(75, 151, 75),
+		Material = Enum.Material.Grass
+	})
+
+	-- 建立黑板
+	local blackboard = createPart("Blackboard", {
+		Position = Vector3.new(0, 28.5, -118),
+		Size = Vector3.new(16, 8, 1),
+		Color = Color3.fromRGB(27, 27, 27),
+		Material = Enum.Material.Slate
+	})
+
+	-- 建立作答區
+	local padCorrect = createPart("AnswerPadCorrect", {
+		Position = Vector3.new(-10, 21.1, -105),
+		Size = Vector3.new(10, 0.2, 10),
+		Color = Color3.fromRGB(46, 204, 113),
+		Material = Enum.Material.Neon
+	})
+
+	local padWrong = createPart("AnswerPadWrong", {
+		Position = Vector3.new(10, 21.1, -105),
+		Size = Vector3.new(10, 0.2, 10),
+		Color = Color3.fromRGB(231, 76, 60),
+		Material = Enum.Material.Neon
+	})
+
+	-- 建立牆壁與天花板
+	createPart("WallBack", { Position = Vector3.new(0, 31, -120), Size = Vector3.new(40, 20, 1), Color = Color3.fromRGB(204, 191, 153), Material = Enum.Material.SmoothPlastic })
+	createPart("WallFront", { Position = Vector3.new(0, 31, -80), Size = Vector3.new(40, 20, 1), Color = Color3.fromRGB(204, 191, 153), Material = Enum.Material.SmoothPlastic })
+	createPart("WallLeft", { Position = Vector3.new(-20, 31, -100), Size = Vector3.new(1, 20, 40), Color = Color3.fromRGB(204, 191, 153), Material = Enum.Material.SmoothPlastic })
+	createPart("WallRight", { Position = Vector3.new(20, 31, -100), Size = Vector3.new(1, 20, 40), Color = Color3.fromRGB(204, 191, 153), Material = Enum.Material.SmoothPlastic })
+	createPart("Ceiling", { Position = Vector3.new(0, 41.5, -100), Size = Vector3.new(40, 1, 40), Color = Color3.fromRGB(204, 204, 204), Material = Enum.Material.Concrete })
+	
+	local lightPart = createPart("ClassroomLight", { Position = Vector3.new(0, 41, -100), Size = Vector3.new(4, 0.5, 8), Color = Color3.fromRGB(255, 255, 255), Material = Enum.Material.Neon })
+	local light = Instance.new("PointLight")
+	light.Range = 30
+	light.Brightness = 1.5
+	light.Parent = lightPart
+
+	classroom.Parent = Workspace
+	
+	return {
+		model = classroom,
+		blackboard = blackboard,
+		padCorrect = padCorrect,
+		padWrong = padWrong,
+		floor = floor
+	}
+end
+
 -- 踩踏事件偵測
 local function onPadTouch(hit, isCorrectPad)
 	if answerChosen then return end
 	local char = player.Character
 	if char and hit:IsDescendantOf(char) then
-		local pad = isCorrectPad and padCorrect or padWrong
+		local pad = isCorrectPad and localClassroom.padCorrect or localClassroom.padWrong
 		flashPad(pad)
 		handleAnswer(isCorrectPad)
 	end
 end
 
-padCorrect.Touched:Connect(function(hit) onPadTouch(hit, true) end)
-padWrong.Touched:Connect(function(hit) onPadTouch(hit, false) end)
-
 local function startGameSession()
 	if gameRunning then return end
 	
 	if startPrompt then startPrompt.Enabled = false end
+
+	-- 建立獨立教室
+	localClassroom = createLocalClassroom()
+	surfaceGui.Parent = localClassroom.blackboard
+
+	-- 綁定新的踩踏事件
+	localClassroom.padCorrect.Touched:Connect(function(hit) onPadTouch(hit, true) end)
+	localClassroom.padWrong.Touched:Connect(function(hit) onPadTouch(hit, false) end)
+
+	-- 傳送玩家
+	if player.Character then
+		player.Character:PivotTo(CFrame.new(0, 25, -100) * CFrame.Angles(0, math.rad(180), 0))
+	end
 
 	task.wait(0.5) -- 稍微等待伺服器準備
 	gameRunning = true
@@ -404,7 +497,6 @@ local function startGameSession()
 	-- 向伺服器請求 10 個隨機翻譯好的單字
 	wordList = getWordListFunc:InvokeServer()
 	
-	surfaceGui.Enabled = true
 	currentRound = 0
 	currentStreak = 0 -- 重置連勝
 	nextQuestion()

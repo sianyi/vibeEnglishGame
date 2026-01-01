@@ -131,28 +131,13 @@ local function onClientEvent(player, action, data)
 		playerSessionScores[player] = 0
 		playerStreaks[player] = 0
 		toggleStreakParticles(player, false)
-		
-		-- 傳送玩家到遊戲區 (教室)
-		if player.Character then
-			local classroom = Workspace:WaitForChild("Classroom")
-			local floor = classroom:WaitForChild("Floor")
-			
-			local hrp = player.Character:FindFirstChild("HumanoidRootPart")
-
-			-- 動態計算傳送點：地板位置往上 5 格，並面向黑板 (假設黑板在地板的 -Z 方向)
-			local targetCFrame = CFrame.new(floor.Position.X, floor.Position.Y + 5, floor.Position.Z) * CFrame.Angles(0, math.rad(180), 0)
-			
-			player.Character:PivotTo(targetCFrame)
-			-- 重置速度，防止玩家帶著動量飛出去
-			if hrp then
-				hrp.AssemblyLinearVelocity = Vector3.zero
-			end
-		end
 	elseif action == "EndGame" then
+		print(string.format(">>> [SERVER] 收到來自 %s 的 EndGame 事件，準備傳送回大廳。", player.Name))
 		-- 遊戲結束，傳送回重生點
 		toggleStreakParticles(player, false)
 		if player.Character then
 			player.Character:PivotTo(CFrame.new(0, 10, 0))
+			print(string.format(">>> [SERVER] %s 已被傳送回大廳。", player.Name))
 		end
 	-- 接收客戶端傳來的結果
 	elseif action == "AnswerResult" then
