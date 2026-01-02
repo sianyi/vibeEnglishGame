@@ -25,6 +25,11 @@ local soundFling = Instance.new("Sound")
 soundFling.SoundId = "rbxassetid://12222084"
 soundFling.Parent = playerGui
 
+local soundTeacherHit = Instance.new("Sound")
+soundTeacherHit.SoundId = "rbxassetid://12222216" -- Classic Hit sound
+soundTeacherHit.Volume = 0.7
+soundTeacherHit.Parent = playerGui
+
 local GameSession = {}
 GameSession.__index = GameSession
 
@@ -54,6 +59,8 @@ function GameSession.new(remote, getWordListFunc, uiElements, onGameOverCallback
 	-- NPC 相關
 	self.teacherNPC = nil
 	self.aiConnection = nil
+	self.teacherState = "CHASING" -- 老師的 AI 狀態: "CHASING" 或 "WANDERING"
+	self.surfaceGuis = {} -- 用於管理所有黑板UI，防止被銷毀
 	self.teacherTouchConnection = nil
 
 	-- 建立場景
@@ -65,11 +72,13 @@ function GameSession.new(remote, getWordListFunc, uiElements, onGameOverCallback
 	self.titleLabels = {self.ui.titleLabel}
 	self.questionLabels = {self.ui.questionLabel}
 	self.timerLabels = {self.ui.timerLabel}
+	table.insert(self.surfaceGuis, self.ui.surfaceGui)
 
 	-- 複製 UI 到其他牆面的黑板
 	local function setupExtraBoard(part, face)
 		local clone = self.ui.surfaceGui:Clone()
 		if face then clone.Face = face end
+		table.insert(self.surfaceGuis, clone)
 		clone.Parent = part
 		
 		local t = clone:WaitForChild("TitleLabel", 5)
@@ -119,13 +128,15 @@ function GameSession:Start()
 			return
 		end
 		
-		local playerRoot = playerChar.PrimaryPart
-		local playerPos = playerRoot.Position
-		
-		-- 使用 Move 代替 MoveTo 以獲得更平滑的追逐效果
-		local npcRoot = self.teacherNPC.PrimaryPart
-		local direction = (playerPos - npcRoot.Position).Unit
-		teacherHumanoid:Move(direction)
+		if self.teacherState == "CHASING" then
+			local playerRoot = playerChar.PrimaryPart
+			local playerPos = playerRoot.Position
+			
+			-- 使用 Move 代替 MoveTo 以獲得更平滑的追逐效果
+			local npcRoot = self.teacherNPC.PrimaryPart
+			local direction = (playerPos - npcRoot.Position).Unit
+			teacherHumanoid:Move(direction)
+		end
 	end)
 
 	-- 老師速度變化
@@ -134,8 +145,9 @@ function GameSession:Start()
 		if not teacherHumanoid then return end
 
 		while self.teacherNPC and self.teacherNPC.Parent do
-			local newSpeed = math.random(8, 16) -- 玩家速度的 1/2 到 1 倍 (8-16)
+			local newSpeed = math.random(4, 12) -- 調整為玩家速度的 1/4 到 3/4 (4-12)
 			teacherHumanoid.WalkSpeed = newSpeed
+			logger:debug("Teacher speed changed to: " .. newSpeed)
 			task.wait(math.random(2, 4)) -- 每 2-4 秒變換一次速度
 		end
 	end)
@@ -150,16 +162,17 @@ function GameSession:Destroy()
 	if self.aiConnection then self.aiConnection:Disconnect() end
 	if self.teacherTouchConnection then self.teacherTouchConnection:Disconnect() end
 
+	-- 先將所有 UI 從教室中移除，防止它們被一併銷毀
+	for _, gui in ipairs(self.surfaceGuis) do
+		if gui then gui.Parent = nil end
+	end
+
 	if self.classroom and self.classroom.model then
 		self.classroom.model:Destroy()
 	end
 	
-	-- 注意：UI 不銷毀，只是解除 Parent，以便下次重用 (由主腳本管理 UI 生命週期)
-	if self.ui then
-		if self.ui.surfaceGui then self.ui.surfaceGui.Parent = nil end
-		if self.ui.struggleLabel then self.ui.struggleLabel.Visible = false end
-		if self.ui.struggleButton then self.ui.struggleButton.Visible = false end
-	end
+	if self.ui.struggleLabel then self.ui.struggleLabel.Visible = false end
+	if self.ui.struggleButton then self.ui.struggleButton.Visible = false end
 end
 
 function GameSession:_createLocalClassroom(offset)
@@ -330,6 +343,9 @@ function GameSession:_createTeacherNPC(offset)
 				local dist = (root.Position - hrp.Position).Magnitude
 				logger:debug(string.format("Teacher Hit! PlayerPos: %.1f, %.1f, %.1f | TeacherPos: %.1f, %.1f, %.1f | Dist: %.2f", root.Position.X, root.Position.Y, root.Position.Z, hrp.Position.X, hrp.Position.Y, hrp.Position.Z, dist))
 
+				-- 播放攻擊音效
+				soundTeacherHit:Play()
+
 				debounce = true
 				
 				-- 1. 擊飛效果：計算從老師指向玩家的方向
@@ -340,6 +356,21 @@ function GameSession:_createTeacherNPC(offset)
 				
 				-- 2. 觸發跌倒與掙扎機制
 				self:triggerStruggle()
+				
+				-- 3. 讓老師開始隨機遊走，直到玩家站起來
+				self.teacherState = "WANDERING"
+				task.spawn(function()
+					local wanderHumanoid = self.teacherNPC and self.teacherNPC:FindFirstChildOfClass("Humanoid")
+					if not wanderHumanoid then return end
+					
+					while self.teacherState == "WANDERING" and self.teacherNPC.Parent do
+						local randomX = self.roomOffset.X + math.random(-45, 45)
+						local randomZ = self.roomOffset.Z + math.random(-145, -55)
+						local randomPos = Vector3.new(randomX, self.roomOffset.Y + 21, randomZ)
+						wanderHumanoid:MoveTo(randomPos)
+						wanderHumanoid.MoveToFinished:Wait()
+					end
+				end)
 				
 				task.wait(1.5) -- 冷卻時間
 				debounce = false
@@ -477,6 +508,9 @@ function GameSession:triggerStruggle()
 				if hum and hum.Parent then
 					hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, true) -- 恢復跳躍能力
 					hum.Sit = false -- 站起來
+					
+					-- 通知老師可以繼續追蹤
+					self.teacherState = "CHASING"
 				end
 				self.ui.struggleLabel.Visible = false
 				self.ui.struggleButton.Visible = false

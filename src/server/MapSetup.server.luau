@@ -1,5 +1,41 @@
 local Workspace = game:GetService("Workspace")
 local ServerStorage = game:GetService("ServerStorage")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- Merged AssetProvider logic to resolve require() issue
+local function createTeacherRig()
+	local Shared = ReplicatedStorage:WaitForChild("Shared")
+
+	local existingRig = Shared:FindFirstChild("TeacherRig")
+	if existingRig then existingRig:Destroy() end
+
+	local success, rig = pcall(function()
+		local desc = Instance.new("HumanoidDescription")
+		desc.HeightScale = 1.5
+		desc.WidthScale = 1.5
+		desc.DepthScale = 1.5
+		desc.HeadScale = 1.5
+		desc.Shirt = 144076358
+		desc.Pants = 144076468
+		desc.HairAccessory = "16630147"
+		desc.FaceAccessory = "118279773"
+		return Players:CreateHumanoidModelFromDescription(desc, Enum.HumanoidRigType.R15)
+	end)
+
+	if success and rig then
+		rig.Name = "TeacherRig"
+		for _, part in ipairs(rig:GetDescendants()) do
+			if part:IsA("BasePart") then
+				part.Anchored = true
+			end
+		end
+		rig.Parent = Shared
+		print("✅ [SERVER] 已自動生成 R15 TeacherRig。")
+	else
+		warn("⚠️ [SERVER] 生成 TeacherRig 失敗。")
+	end
+end
 
 local function ensurePart(name, parent, properties, children)
 	local part = parent:FindFirstChild(name)
@@ -90,5 +126,8 @@ if not sign:FindFirstChild("SignGui") then
 	label.Font = Enum.Font.GothamBlack
 	label.Parent = gui
 end
+
+-- 6. 生成所有必要的資源
+createTeacherRig()
 
 print("✅ [SERVER] MapSetup 完成，場景物件已建立。")
