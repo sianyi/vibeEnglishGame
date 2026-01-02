@@ -91,12 +91,4 @@ if not sign:FindFirstChild("SignGui") then
 	label.Parent = gui
 end
 
--- 6. 建立 ClickPart
-ensurePart("ClickPart", Workspace, {
-	Position = Vector3.new(10, 5, 0),
-	Size = Vector3.new(4, 4, 4),
-	Color = Color3.fromRGB(255, 204, 0),
-	Anchored = true
-})
-
 print("✅ [SERVER] MapSetup 完成，場景物件已建立。")
