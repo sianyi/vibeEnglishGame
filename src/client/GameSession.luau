@@ -55,6 +55,56 @@ function GameSession.new(remote, getWordListFunc, uiElements, onGameOverCallback
 	self.classroom = self:_createLocalClassroom(self.roomOffset)
 	self.ui.surfaceGui.Parent = self.classroom.blackboard
 
+	-- 初始化 UI 列表，並為主黑板加上除錯編號
+	self.titleLabels = {self.ui.titleLabel}
+	self.questionLabels = {self.ui.questionLabel}
+	self.timerLabels = {self.ui.timerLabel}
+	
+	local mainDebugLabel = Instance.new("TextLabel")
+	mainDebugLabel.Name = "DebugIdLabel"
+	mainDebugLabel.Size = UDim2.new(0.2, 0, 0.1, 0)
+	mainDebugLabel.Position = UDim2.new(0, 5, 0, 5)
+	mainDebugLabel.BackgroundTransparency = 0.5
+	mainDebugLabel.BackgroundColor3 = Color3.new(1,0,0)
+	mainDebugLabel.TextColor3 = Color3.new(1,1,1)
+	mainDebugLabel.Text = "1"
+	mainDebugLabel.Font = Enum.Font.SourceSansBold
+	mainDebugLabel.TextSize = 20
+	mainDebugLabel.Parent = self.ui.surfaceGui
+	
+	local boardCounter = 1
+
+	-- 複製 UI 到其他牆面的黑板
+	local function setupExtraBoard(part, face)
+		boardCounter = boardCounter + 1
+		local clone = self.ui.surfaceGui:Clone()
+		if face then clone.Face = face end
+		clone.Parent = part
+		
+		-- 更新除錯編號
+		local debugLabel = clone:FindFirstChild("DebugIdLabel")
+		if debugLabel then
+			debugLabel.Text = tostring(boardCounter)
+		end
+		
+		local t = clone:WaitForChild("TitleLabel", 5)
+		local q = clone:WaitForChild("QuestionLabel", 5)
+		local tm = clone:WaitForChild("TimerLabel", 5)
+		
+		if t then table.insert(self.titleLabels, t) end
+		if q then table.insert(self.questionLabels, q) end
+		if tm then table.insert(self.timerLabels, tm) end
+		logger:debug("Extra board setup for: " .. part.Name .. " (ID: " .. boardCounter .. ")")
+	end
+
+	if self.classroom.blackboardFront then setupExtraBoard(self.classroom.blackboardFront, Enum.NormalId.Front) end
+	if self.classroom.blackboardLeft then setupExtraBoard(self.classroom.blackboardLeft, Enum.NormalId.Right) end
+	if self.classroom.blackboardRight then setupExtraBoard(self.classroom.blackboardRight, Enum.NormalId.Left) end
+
+	logger:debug("Total title labels: " .. #self.titleLabels)
+	logger:debug("Total question labels: " .. #self.questionLabels)
+	logger:debug("Total timer labels: " .. #self.timerLabels)
+
 	-- 綁定事件
 	self.padCorrectConnection = self.classroom.padCorrect.Touched:Connect(function(hit) self:onPadTouch(hit, true) end)
 	self.padWrongConnection = self.classroom.padWrong.Touched:Connect(function(hit) self:onPadTouch(hit, false) end)
@@ -107,6 +157,8 @@ function GameSession:_createLocalClassroom(offset)
 		for k, v in pairs(props) do
 			if k == "Position" then
 				part[k] = v + offset
+			elseif k == "CFrame" then
+				part[k] = v + offset
 			else
 				part[k] = v
 			end
@@ -119,6 +171,11 @@ function GameSession:_createLocalClassroom(offset)
 	local floor = createPart("Floor", { Position = Vector3.new(0, 20, -100), Size = Vector3.new(50, 2, 50), Color = Color3.fromRGB(75, 151, 75), Material = Enum.Material.Grass })
 	-- 建立黑板
 	local blackboard = createPart("Blackboard", { Position = Vector3.new(0, 28.5, -118), Size = Vector3.new(16, 8, 1), Color = Color3.fromRGB(27, 27, 27), Material = Enum.Material.Slate })
+	-- 建立其他牆面的黑板 (旋轉以面向房間中心)
+	local blackboardFront = createPart("BlackboardFront", { Position = Vector3.new(0, 28.5, -82), Size = Vector3.new(16, 8, 1), Color = Color3.fromRGB(27, 27, 27), Material = Enum.Material.Slate })
+	local blackboardLeft = createPart("BlackboardLeft", { Position = Vector3.new(-18, 28.5, -100), Size = Vector3.new(1, 8, 16), Color = Color3.fromRGB(27, 27, 27), Material = Enum.Material.Slate })
+	local blackboardRight = createPart("BlackboardRight", { Position = Vector3.new(18, 28.5, -100), Size = Vector3.new(1, 8, 16), Color = Color3.fromRGB(27, 27, 27), Material = Enum.Material.Slate })
+
 	-- 建立作答區
 	local padCorrect = createPart("AnswerPadCorrect", { Position = Vector3.new(-10, 21.1, -105), Size = Vector3.new(10, 0.2, 10), Color = Color3.fromRGB(46, 204, 113), Material = Enum.Material.Neon })
 	local padWrong = createPart("AnswerPadWrong", { Position = Vector3.new(10, 21.1, -105), Size = Vector3.new(10, 0.2, 10), Color = Color3.fromRGB(231, 76, 60), Material = Enum.Material.Neon })
@@ -132,9 +189,36 @@ function GameSession:_createLocalClassroom(offset)
 	local lightPart = createPart("ClassroomLight", { Position = Vector3.new(0, 41, -100), Size = Vector3.new(4, 0.5, 8), Color = Color3.fromRGB(255, 255, 255), Material = Enum.Material.Neon })
 	local light = Instance.new("PointLight"); light.Range = 30; light.Brightness = 1.5; light.Parent = lightPart
 
+	-- 新增地板文字 (Yes/No)
+	local function addLabel(part, text)
+		local sg = Instance.new("SurfaceGui")
+		sg.Face = Enum.NormalId.Top
+		sg.PixelsPerStud = 20
+		sg.Parent = part
+		local tl = Instance.new("TextLabel")
+		tl.Size = UDim2.new(1, 0, 1, 0)
+		tl.BackgroundTransparency = 1
+		tl.Text = text
+		tl.TextColor3 = Color3.new(1, 1, 1)
+		tl.TextScaled = true
+		tl.Font = Enum.Font.GothamBlack
+		tl.Parent = sg
+	end
+	addLabel(padCorrect, "YES")
+	addLabel(padWrong, "NO")
+
 	classroom.Parent = Workspace
 	
-	return { model = classroom, blackboard = blackboard, padCorrect = padCorrect, padWrong = padWrong, floor = floor }
+	return { 
+		model = classroom, 
+		blackboard = blackboard, 
+		blackboardFront = blackboardFront,
+		blackboardLeft = blackboardLeft,
+		blackboardRight = blackboardRight,
+		padCorrect = padCorrect, 
+		padWrong = padWrong, 
+		floor = floor 
+	}
 end
 
 function GameSession:onPadTouch(hit, isCorrectPad)
@@ -154,17 +238,20 @@ function GameSession:nextQuestion()
 	end
 	
 	self.currentRound += 1
-	self.ui.titleLabel.Text = "第 " .. self.currentRound .. " / " .. self.maxRounds .. " 題"
+	local titleText = "第 " .. self.currentRound .. " / " .. self.maxRounds .. " 題"
+	for _, label in ipairs(self.titleLabels) do label.Text = titleText end
+	
 	self.answerChosen = false
 	
 	local data = self.wordList[self.currentRound]
 	if not data then return end
 	
 	self.currentAnswerIsMatch = data.isCorrect
-	self.ui.questionLabel.Text = data.en .. "\n=\n" .. data.displayCn .. " ?"
+	local qText = data.en .. "\n=\n" .. data.displayCn .. " ?"
+	for _, label in ipairs(self.questionLabels) do label.Text = qText end
 	
 	local timeLeft = 10
-	self.ui.timerLabel.Text = "剩餘時間: " .. timeLeft
+	for _, label in ipairs(self.timerLabels) do label.Text = "剩餘時間: " .. timeLeft end
 	
 	task.spawn(function()
 		local thisRound = self.currentRound
@@ -172,7 +259,7 @@ function GameSession:nextQuestion()
 			if self.answerChosen or self.currentRound ~= thisRound then return end
 			task.wait(1)
 			timeLeft -= 1
-			self.ui.timerLabel.Text = "剩餘時間: " .. timeLeft
+			for _, label in ipairs(self.timerLabels) do label.Text = "剩餘時間: " .. timeLeft end
 		end
 		if not self.answerChosen and self.currentRound == thisRound then
 			self:handleAnswer(nil)
@@ -186,20 +273,24 @@ function GameSession:handleAnswer(playerChoice)
 	
 	local isWin = false
 	if playerChoice == nil then
-		self.ui.questionLabel.Text = "時間到！"
+		for _, label in ipairs(self.questionLabels) do label.Text = "時間到！" end
 		self.currentStreak = 0
 		soundWrong:Play()
 	elseif playerChoice == self.currentAnswerIsMatch then
 		self.currentStreak += 1
-		self.ui.questionLabel.Text = self.currentStreak >= 3 and "答對了！ (+20 連勝!)" or "答對了！ (+10)"
+		local winText = self.currentStreak >= 3 and "答對了！ (+20 連勝!)" or "答對了！ (+10)"
+		for _, label in ipairs(self.questionLabels) do label.Text = winText end
+		
 		if self.currentStreak >= 3 then
 			local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Bounce, Enum.EasingDirection.Out, 0, true)
-			TweenService:Create(self.ui.questionLabel, tweenInfo, {TextSize = 80}):Play()
+			for _, label in ipairs(self.questionLabels) do
+				TweenService:Create(label, tweenInfo, {TextSize = 80}):Play()
+			end
 		end
 		isWin = true
 		soundCorrect:Play()
 	else
-		self.ui.questionLabel.Text = "答錯了！ (-10)"
+		for _, label in ipairs(self.questionLabels) do label.Text = "答錯了！ (-10)" end
 		self.currentStreak = 0
 		soundWrong:Play()
 	end

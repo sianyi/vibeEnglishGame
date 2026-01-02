@@ -52,9 +52,32 @@ local function setupGameUI()
 	surfaceGui.LightInfluence = 0
 	surfaceGui.PixelsPerStud = 50
 
-	titleLabel.Size = UDim2.new(1, 0, 0.15, 0); titleLabel.BackgroundTransparency = 1; titleLabel.TextColor3 = Color3.new(1, 1, 1); titleLabel.Font = Enum.Font.GothamBold; titleLabel.TextSize = 40; titleLabel.Parent = surfaceGui
-	questionLabel.Size = UDim2.new(1, 0, 0.6, 0); questionLabel.Position = UDim2.new(0, 0, 0.2, 0); questionLabel.BackgroundTransparency = 1; questionLabel.TextColor3 = Color3.fromRGB(255, 220, 0); questionLabel.Font = Enum.Font.GothamBlack; questionLabel.TextSize = 60; questionLabel.TextWrapped = true; questionLabel.Parent = surfaceGui
-	timerLabel.Size = UDim2.new(1, 0, 0.15, 0); timerLabel.Position = UDim2.new(0, 0, 0.85, 0); timerLabel.BackgroundTransparency = 1; timerLabel.TextColor3 = Color3.fromRGB(255, 100, 100); timerLabel.Font = Enum.Font.Gotham; timerLabel.TextSize = 40; timerLabel.Parent = surfaceGui
+	titleLabel.Name = "TitleLabel"
+	titleLabel.Size = UDim2.new(1, 0, 0.15, 0)
+	titleLabel.BackgroundTransparency = 1
+	titleLabel.TextColor3 = Color3.new(1, 1, 1)
+	titleLabel.Font = Enum.Font.GothamBold
+	titleLabel.TextSize = 40
+	titleLabel.Parent = surfaceGui
+
+	questionLabel.Name = "QuestionLabel"
+	questionLabel.Size = UDim2.new(1, 0, 0.6, 0)
+	questionLabel.Position = UDim2.new(0, 0, 0.2, 0)
+	questionLabel.BackgroundTransparency = 1
+	questionLabel.TextColor3 = Color3.fromRGB(255, 220, 0)
+	questionLabel.Font = Enum.Font.GothamBlack
+	questionLabel.TextSize = 60
+	questionLabel.TextWrapped = true
+	questionLabel.Parent = surfaceGui
+
+	timerLabel.Name = "TimerLabel"
+	timerLabel.Size = UDim2.new(1, 0, 0.15, 0)
+	timerLabel.Position = UDim2.new(0, 0, 0.85, 0)
+	timerLabel.BackgroundTransparency = 1
+	timerLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+	timerLabel.Font = Enum.Font.Gotham
+	timerLabel.TextSize = 40
+	timerLabel.Parent = surfaceGui
 end
 
 setupGameUI()
