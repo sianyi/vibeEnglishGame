@@ -66,7 +66,7 @@ local function setupGameUI()
 	questionLabel.BackgroundTransparency = 1
 	questionLabel.TextColor3 = Color3.fromRGB(255, 220, 0)
 	questionLabel.Font = Enum.Font.GothamBlack
-	questionLabel.TextSize = 60
+	questionLabel.TextSize = 100
 	questionLabel.TextWrapped = true
 	questionLabel.Parent = surfaceGui
 
