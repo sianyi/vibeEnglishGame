@@ -93,7 +93,7 @@ ensurePart("WordGameZone", Workspace, {
 		Name = "InteractPrompt",
 		Properties = {
 			ActionText = "開始挑戰",
-			ObjectText = "單字遊戲",
+			ObjectText = "單人練習房 (Single Player)",
 			KeyboardKeyCode = Enum.KeyCode.E,
 			RequiresLineOfSight = false,
 			HoldDuration = 0.5,
@@ -120,7 +120,7 @@ if not sign:FindFirstChild("SignGui") then
 	local label = Instance.new("TextLabel")
 	label.Size = UDim2.new(1, 0, 1, 0)
 	label.BackgroundTransparency = 1
-	label.Text = "1000單字\n測試遊戲"
+	label.Text = "單人\n練習室"
 	label.TextColor3 = Color3.new(1, 1, 1)
 	label.TextScaled = true
 	label.Font = Enum.Font.GothamBlack
@@ -129,5 +129,27 @@ end
 
 -- 6. 生成所有必要的資源
 createTeacherRig()
+
+-- 7. 建立多人遊戲區域 (預留架構)
+ensurePart("MultiplayerZone", Workspace, {
+	Position = Vector3.new(20, 0.6, 15), -- 放在單人房旁邊
+	Size = Vector3.new(12, 1, 12),
+	Color = Color3.fromRGB(255, 80, 80), -- 紅色代表競技
+	Material = Enum.Material.Neon,
+	CanCollide = false
+}, {
+	{
+		ClassName = "ProximityPrompt",
+		Name = "InteractPrompt",
+		Properties = {
+			ActionText = "進入大廳",
+			ObjectText = "多人對戰房 (Multiplayer)",
+			KeyboardKeyCode = Enum.KeyCode.E,
+			RequiresLineOfSight = false,
+			HoldDuration = 0.5,
+			MaxActivationDistance = 15
+		}
+	}
+})
 
 print("✅ [SERVER] MapSetup 完成，場景物件已建立。")

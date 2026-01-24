@@ -1,6 +1,6 @@
-local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
+local WordService = require(script.Parent:WaitForChild("WordService"))
 
 -- 建立 RemoteEvent 用於前後端通訊
 local REMOTE_NAME = "WordGameEvent"
@@ -20,71 +20,9 @@ if not getWordListFunc then
 	getWordListFunc.Parent = ReplicatedStorage
 end
 
--- 載入單字庫 (純英文列表)
-local Shared = ReplicatedStorage:WaitForChild("Shared")
-local fullWordList = require(Shared:WaitForChild("WordList"))
-
--- 翻譯函數 (使用 Google Translate 非官方 API)
-local function translateText(text)
-	local encoded = HttpService:UrlEncode(text)
-	local url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=zh-TW&dt=t&q=" .. encoded
-	
-	local success, result = pcall(function()
-		return HttpService:GetAsync(url)
-	end)
-
-	if success then
-		local data = HttpService:JSONDecode(result)
-		-- Google API 回傳結構: [[[ "翻譯結果", "原文", ... ]], ...]
-		if data and data[1] and data[1][1] and data[1][1][1] then
-			return data[1][1][1]
-		end
-	end
-	return nil
-end
-
 -- 隨機挑選單字並翻譯
 function getWordListFunc.OnServerInvoke(player)
-	local validPairs = {}
-	local pool = table.clone(fullWordList)
-	
-	-- 1. & 2. 隨機挑選 10 個不重複的單字並翻譯
-	for i = 1, 10 do
-		if #pool == 0 then break end
-		local idx = math.random(1, #pool)
-		local word = table.remove(pool, idx)
-		
-		-- 呼叫翻譯 API
-		local cn = translateText(word)
-		if not cn then cn = "翻譯失敗" end
-		
-		table.insert(validPairs, {en = word, cn = cn})
-		task.wait(0.1) -- 稍微延遲，避免瞬間發送太多請求被 Google 阻擋
-	end
-	
-	-- 3. & 4. 配對出正確與錯誤的結果
-	local gameData = {}
-	for i, pair in ipairs(validPairs) do
-		local isCorrect = math.random() > 0.5
-		local displayCn = pair.cn
-		
-		if not isCorrect and #validPairs > 1 then
-			-- 從其他 9 個單字的中文抽取錯誤答案
-			local wrongIdx = math.random(1, #validPairs)
-			while wrongIdx == i do
-				wrongIdx = math.random(1, #validPairs)
-			end
-			displayCn = validPairs[wrongIdx].cn
-		end
-		
-		table.insert(gameData, {
-			en = pair.en,
-			displayCn = displayCn,
-			isCorrect = isCorrect
-		})
-	end
-	
-	return gameData
+	return WordService.generateQuestions(10)
 end
 
 -- 記錄玩家連勝次數

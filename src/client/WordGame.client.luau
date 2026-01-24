@@ -29,7 +29,7 @@ startButton.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
 startButton.TextColor3 = Color3.new(1, 1, 1)
 startButton.Font = Enum.Font.GothamBold
 startButton.TextSize = 24
-startButton.Text = "開始遊戲"
+startButton.Text = "開始單人練習"
 startButton.Visible = false
 startButton.Parent = screenGui
 
