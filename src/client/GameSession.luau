@@ -9,6 +9,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Logger = require(Shared:WaitForChild("Logger"))
 local logger = Logger.new("GameSession")
 
+local CountdownUI = require(script.Parent:WaitForChild("CountdownUI"))
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
@@ -33,6 +34,8 @@ soundTeacherHit.Parent = playerGui
 local GameSession = {}
 GameSession.__index = GameSession
 
+warn("[GameSession] Module loaded. Waiting for new() call...")
+
 -- 視覺回饋：讓地板發光閃爍
 local function flashPad(pad)
 	local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, true)
@@ -41,6 +44,7 @@ local function flashPad(pad)
 end
 
 function GameSession.new(remote, getWordListFunc, uiElements, onGameOverCallback)
+	warn("[GameSession] new() called. Initializing session...")
 	local self = setmetatable({}, GameSession)
 
 	self.remote = remote
@@ -101,14 +105,22 @@ function GameSession.new(remote, getWordListFunc, uiElements, onGameOverCallback
 	self.padCorrectConnection = self.classroom.padCorrect.Touched:Connect(function(hit) self:onPadTouch(hit, true) end)
 	self.padWrongConnection = self.classroom.padWrong.Touched:Connect(function(hit) self:onPadTouch(hit, false) end)
 
+	self.countdownUI = CountdownUI.new()
+
 	return self
 end
 
 function GameSession:Start()
+	warn("[GameSession] Start() called. Teleporting player...")
 	-- 傳送玩家
 	if player.Character then
 		player.Character:PivotTo(CFrame.new(self.roomOffset) * CFrame.new(0, 25, -100) * CFrame.Angles(0, math.rad(180), 0))
 	end
+
+	-- 播放倒數動畫 (會等待 3 秒)
+	warn("[GameSession] Starting countdown animation...")
+	self.countdownUI:Play(3)
+	warn("[GameSession] Countdown finished. Starting game loop.")
 
 	-- 通知伺服器遊戲開始
 	self.remote:FireServer("StartGame")
@@ -161,6 +173,10 @@ function GameSession:Destroy()
 	if self.struggleButtonConnection then self.struggleButtonConnection:Disconnect() end
 	if self.aiConnection then self.aiConnection:Disconnect() end
 	if self.teacherTouchConnection then self.teacherTouchConnection:Disconnect() end
+
+	if self.countdownUI then
+		self.countdownUI:Destroy()
+	end
 
 	-- 先將所有 UI 從教室中移除，防止它們被一併銷毀
 	for _, gui in ipairs(self.surfaceGuis) do

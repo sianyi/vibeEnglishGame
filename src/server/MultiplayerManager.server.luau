@@ -5,14 +5,66 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local RunService = game:GetService("RunService")
 local WordService = require(script.Parent:WaitForChild("WordService"))
 
+-- 等待 MapSetup 完成
+print(">>> [SERVER] 等待 MapSetup 完成...")
+local maxWait = 10
+local waited = 0
+while not ServerScriptService:GetAttribute("MapSetupComplete") and waited < maxWait do
+	task.wait(1)
+	waited += 1
+	print(">>> [SERVER] 等待中... (" .. waited .. "/" .. maxWait .. ")")
+end
+
+if not ServerScriptService:GetAttribute("MapSetupComplete") then
+	warn(">>> [SERVER] 警告: MapSetup 未完成，但繼續執行...")
+end
+
+print(">>> [SERVER] MapSetup 已完成，開始初始化...")
+
+-- 確保 Shared 資料夾存在
+local Shared = ReplicatedStorage:FindFirstChild("Shared")
+if not Shared then
+	Shared = Instance.new("Folder")
+	Shared.Name = "Shared"
+	Shared.Parent = ReplicatedStorage
+	warn(">>> [SERVER] 警告: Shared 資料夾不存在，已創建")
+end
+
+-- 載入日誌系統
+local GameLogger
+local logger = nil
+local function initLogger()
+	local success, err = pcall(function()
+		GameLogger = require(Shared:WaitForChild("GameLogger"))
+	end)
+	if success and GameLogger then
+		logger = GameLogger.new("MultiplayerManager")
+		logger:info("=== 日誌系統初始化成功 ===")
+		logger:info("Session ID: " .. GameLogger.getSessionId())
+	else
+		warn(">>> [SERVER] 無法載入 GameLogger: " .. tostring(err))
+		-- 創建一個簡單的 logger 後備
+		logger = {
+			info = function(self, msg) print("[INFO] " .. msg) end,
+			warn = function(self, msg) warn("[WARN] " .. msg) end,
+			error = function(self, msg) warn("[ERROR] " .. msg) end,
+			debug = function(self, msg) print("[DEBUG] " .. msg) end,
+			logAction = function(self, action, details) print("[ACTION] " .. action .. " | " .. details) end
+		}
+	end
+end
+initLogger()
+
 -- Singleton Check: 防止腳本重複執行
 if ServerScriptService:GetAttribute("MultiplayerManagerRunning") then
-	warn(">>> [SERVER] MultiplayerManager 已經在運行中，停止此副本。")
+	logger:warn("MultiplayerManager 已經在運行中，停止此副本。")
 	return
 end
 ServerScriptService:SetAttribute("MultiplayerManagerRunning", true)
 
-print(">>> [SERVER] MultiplayerManager 正在啟動...")
+logger:info("========================================")
+logger:info("MultiplayerManager 正在啟動...")
+logger:info("========================================")
 
 -- 狀態變數
 local lobbyPlayers = {}
@@ -31,20 +83,81 @@ local gameLoopActive = false
 local MIN_PLAYERS = 1 -- 測試用設為 1，正式可改為 2
 local INTERMISSION_TIME = 3 -- 縮短倒數時間
 
+-- 老師動畫 ID (可以使用 Roblox 提供的動畫或自行上傳)
+local TEACHER_ANIMS = {
+	Angry = "rbxassetid://507770453", -- 、生氣動畫
+	Happy = "rbxassetid://507770240", -- 開心/勝利動畫
+	Idle = "rbxassetid://507765644", -- 待機動畫
+	Walk = "rbxassetid://507777826", -- 走路動畫
+}
+
+-- 新增：單字級別與難度設定
+local currentWordLevel = 1000 -- 預設 Level 1000
+local currentDifficulty = nil -- nil 代表不限制難度
+
 -- 參照
-local multiplayerZone = Workspace:WaitForChild("MultiplayerZone", 30)
-if not multiplayerZone then
-	warn(">>> [SERVER] 錯誤: 找不到 MultiplayerZone！請檢查 MapSetup 是否正確執行。")
-	return
+-- 尋找所有等級區域 (使用 WaitForChild 確保區域已創建)
+local levelZones = {}
+local function findLevelZones()
+	logger:info("開始搜尋等級區域...")
+	
+	for i = 1000, 5000, 1000 do
+		local zoneName = "LevelZone_" .. i
+		-- 使用 WaitForChild 等待區域創建，最多等 10 秒
+		logger:info("嘗試尋找區域: " .. zoneName)
+		
+		local zone = Workspace:FindFirstChild(zoneName)
+		if zone then
+			table.insert(levelZones, zone)
+			logger:info("✅ 找到區域: " .. zoneName .. " | WordLevel=" .. tostring(zone:GetAttribute("WordLevel")))
+		else
+			logger:warn("❌ 找不到區域: " .. zoneName)
+		end
+	end
+	
+	logger:info("搜尋完成！找到 " .. #levelZones .. " 個等級區域")
 end
 
-local prompt = multiplayerZone:WaitForChild("InteractPrompt", 10)
-if not prompt then
-	warn(">>> [SERVER] 錯誤: 找不到 InteractPrompt！")
-	return
+-- 嘗試尋找等級區域，如果找不到則創建它們
+logger:info("啟動任務來搜尋等級區域...")
+task.spawn(function()
+	findLevelZones()
+end)
+
+local multiplayerZone = nil
+-- 嘗試找舊的多人區域
+task.spawn(function()
+	multiplayerZone = Workspace:FindFirstChild("MultiplayerZone")
+	if multiplayerZone then
+		logger:info("✅ 找到舊的多人區域: MultiplayerZone")
+	else
+		logger:warn("❌ 沒有找到舊的多人區域")
+	end
+end)
+
+-- 建立倒數 RemoteEvent (如果不存在)
+local countdownRemote = ReplicatedStorage:FindFirstChild("GameRemote")
+if not countdownRemote then
+	countdownRemote = Instance.new("RemoteEvent")
+	countdownRemote.Name = "GameRemote"
+	countdownRemote.Parent = ReplicatedStorage
+	logger:warn("GameRemote 不存在，已創建")
+else
+	logger:info("GameRemote 已存在")
 end
 
-print(">>> [SERVER] MultiplayerManager 資源載入完成")
+-- 載入 QuestionData
+local QuestionData
+local success, err = pcall(function()
+	QuestionData = require(Shared:WaitForChild("QuestionData"))
+end)
+
+if not success or not QuestionData then
+	warn(">>> [SERVER] 無法載入 QuestionData，使用 WordService 作為後備:", err)
+	QuestionData = nil
+else
+	logger:info("QuestionData 載入成功！")
+end
 
 -- 輔助函數：建立零件
 local function createPart(name, props, parent)
@@ -79,8 +192,21 @@ local function createSurfaceUI(part, face, text, textSize, color)
 	return label
 end
 
--- 取得題目 (直接呼叫 WordService)
+-- 取得題目 (使用 QuestionData)
 local function getNewQuestion()
+	-- 優先使用 QuestionData
+	if QuestionData then
+		local q = QuestionData.GetRandomQuestion(currentDifficulty, currentWordLevel)
+		return {
+			en = q.Word,
+			displayCn = q.Definition,
+			isCorrect = q.IsCorrect,
+			difficulty = q.Difficulty,
+			level = q.Level
+		}
+	end
+	
+	-- 後備使用 WordService
 	local list = WordService.generateQuestions(1)
 	if list and #list > 0 then
 		return list[1]
@@ -88,50 +214,50 @@ local function getNewQuestion()
 	return {en = "Error", displayCn = "錯誤", isCorrect = true}
 end
 
--- 建立伺服器端教室
+-- 建立伺服器端教室 (縮小版)
 local function createClassroom(offset)
 	local model = Instance.new("Model")
 	model.Name = "MultiplayerClassroom"
 	
-	-- 地板
-	local floor = createPart("Floor", {Position = offset, Size = Vector3.new(100, 2, 100), Color = Color3.fromRGB(75, 151, 75), Material = Enum.Material.Grass}, model)
+	-- 縮小地板 (從 100x100 改為 60x60)
+	local floor = createPart("Floor", {Position = offset, Size = Vector3.new(60, 2, 60), Color = Color3.fromRGB(75, 151, 75), Material = Enum.Material.Grass}, model)
 	
-	-- 作答區 (含 UI)
-	local padYes = createPart("PadYes", {Position = offset + Vector3.new(-25, 1.1, -20), Size = Vector3.new(20, 0.2, 20), Color = Color3.fromRGB(46, 204, 113), Material = Enum.Material.Neon}, model)
-	padYes.Name = "PadYes" -- 確保名稱正確以便識別
-	createSurfaceUI(padYes, Enum.NormalId.Top, "YES", 100)
+	-- 縮小作答區 (含 UI) (從 20x20 改為 14x14)
+	local padYes = createPart("PadYes", {Position = offset + Vector3.new(-15, 1.1, -15), Size = Vector3.new(14, 0.2, 14), Color = Color3.fromRGB(46, 204, 113), Material = Enum.Material.Neon}, model)
+	padYes.Name = "PadYes"
+	createSurfaceUI(padYes, Enum.NormalId.Top, "YES", 80)
 	
-	local padNo = createPart("PadNo", {Position = offset + Vector3.new(25, 1.1, -20), Size = Vector3.new(20, 0.2, 20), Color = Color3.fromRGB(231, 76, 60), Material = Enum.Material.Neon}, model)
+	local padNo = createPart("PadNo", {Position = offset + Vector3.new(15, 1.1, -15), Size = Vector3.new(14, 0.2, 14), Color = Color3.fromRGB(231, 76, 60), Material = Enum.Material.Neon}, model)
 	padNo.Name = "PadNo"
-	createSurfaceUI(padNo, Enum.NormalId.Top, "NO", 100)
+	createSurfaceUI(padNo, Enum.NormalId.Top, "NO", 80)
 	
-	-- 牆壁
-	local wallBack = createPart("WallBack", {Position = offset + Vector3.new(0, 11, -50), Size = Vector3.new(100, 20, 1), Color = Color3.fromRGB(204, 191, 153)}, model)
-	createPart("WallFront", {Position = offset + Vector3.new(0, 11, 50), Size = Vector3.new(100, 20, 1), Color = Color3.fromRGB(204, 191, 153)}, model)
-	createPart("WallLeft", {Position = offset + Vector3.new(-50, 11, 0), Size = Vector3.new(1, 20, 100), Color = Color3.fromRGB(204, 191, 153)}, model)
-	createPart("WallRight", {Position = offset + Vector3.new(50, 11, 0), Size = Vector3.new(1, 20, 100), Color = Color3.fromRGB(204, 191, 153)}, model)
+	-- 縮小牆壁 (從 100 改為 60)
+	local wallBack = createPart("WallBack", {Position = offset + Vector3.new(0, 8, -30), Size = Vector3.new(60, 16, 1), Color = Color3.fromRGB(204, 191, 153)}, model)
+	createPart("WallFront", {Position = offset + Vector3.new(0, 8, 30), Size = Vector3.new(60, 16, 1), Color = Color3.fromRGB(204, 191, 153)}, model)
+	createPart("WallLeft", {Position = offset + Vector3.new(-30, 8, 0), Size = Vector3.new(1, 16, 60), Color = Color3.fromRGB(204, 191, 153)}, model)
+	createPart("WallRight", {Position = offset + Vector3.new(30, 8, 0), Size = Vector3.new(1, 16, 60), Color = Color3.fromRGB(204, 191, 153)}, model)
 	
-	-- 建立四面牆的黑板與 UI
+	-- 建立四面牆的黑板與 UI (縮小)
 	questionLabels = {} -- 重置列表
 	local boardConfigs = {
-		{pos = offset + Vector3.new(0, 15, -48), size = Vector3.new(32, 16, 1), face = Enum.NormalId.Back}, -- 後
-		{pos = offset + Vector3.new(0, 15, 48), size = Vector3.new(32, 16, 1), face = Enum.NormalId.Front}, -- 前
-		{pos = offset + Vector3.new(-48, 15, 0), size = Vector3.new(1, 16, 32), face = Enum.NormalId.Right}, -- 左
-		{pos = offset + Vector3.new(48, 15, 0), size = Vector3.new(1, 16, 32), face = Enum.NormalId.Left}, -- 右
+		{pos = offset + Vector3.new(0, 12, -28), size = Vector3.new(24, 12, 1), face = Enum.NormalId.Back}, -- 後
+		{pos = offset + Vector3.new(0, 12, 28), size = Vector3.new(24, 12, 1), face = Enum.NormalId.Front}, -- 前
+		{pos = offset + Vector3.new(-28, 12, 0), size = Vector3.new(1, 12, 24), face = Enum.NormalId.Right}, -- 左
+		{pos = offset + Vector3.new(28, 12, 0), size = Vector3.new(1, 12, 24), face = Enum.NormalId.Left}, -- 右
 	}
 	
 	for i, cfg in ipairs(boardConfigs) do
 		local board = createPart("Blackboard"..i, {Position = cfg.pos, Size = cfg.size, Color = Color3.fromRGB(27, 27, 27), Material = Enum.Material.Slate}, model)
-		local label = createSurfaceUI(board, cfg.face, "等待題目...", 40, Color3.fromRGB(255, 220, 0))
+		local label = createSurfaceUI(board, cfg.face, "等待題目...", 30, Color3.fromRGB(255, 220, 0))
 		table.insert(questionLabels, label)
 	end
 	
-	-- 天花板與燈光
-	createPart("Ceiling", {Position = offset + Vector3.new(0, 21, 0), Size = Vector3.new(100, 1, 100), Color = Color3.fromRGB(200, 200, 200)}, model)
-	local lightPart = createPart("Light", {Position = offset + Vector3.new(0, 20, 0), Size = Vector3.new(20, 1, 20), Material = Enum.Material.Neon}, model)
+	-- 天花板與燈光 (縮小)
+	createPart("Ceiling", {Position = offset + Vector3.new(0, 16, 0), Size = Vector3.new(60, 1, 60), Color = Color3.fromRGB(200, 200, 200)}, model)
+	local lightPart = createPart("Light", {Position = offset + Vector3.new(0, 15, 0), Size = Vector3.new(15, 1, 15), Material = Enum.Material.Neon}, model)
 	local light = Instance.new("SurfaceLight")
 	light.Face = Enum.NormalId.Bottom
-	light.Range = 60
+	light.Range = 40
 	light.Brightness = 2
 	light.Parent = lightPart
 	
@@ -141,7 +267,7 @@ end
 
 -- 生成老師 NPC
 local function spawnTeacher(position, parent)
-	local teacherRig = ReplicatedStorage.Shared:FindFirstChild("TeacherRig")
+	local teacherRig = Shared:FindFirstChild("TeacherRig")
 	if not teacherRig then
 		warn("TeacherRig not found in Shared!")
 		return nil
@@ -152,6 +278,40 @@ local function spawnTeacher(position, parent)
 	local humanoid = npc:WaitForChild("Humanoid")
 	if humanoid then
 		humanoid.WalkSpeed = 4 -- 設定為玩家速度的 1/4 (16/4 = 4)
+		
+		-- 載入動畫
+		local anims = {}
+		for emotion, animId in pairs(TEACHER_ANIMS) do
+			local anim = Instance.new("Animation")
+			anim.AnimationId = animId
+			anims[emotion] = humanoid:LoadAnimation(anim)
+		end
+		
+		-- 儲存動畫到 NPC 上
+		npc:SetAttribute("TeacherAnims", true)
+		
+		-- 儲存動畫引用
+		humanoid:SetAttribute("Anims", true)
+		
+		-- 等待一小段時間確保動畫載入完成
+		task.wait(0.1)
+		
+		-- 播放待機動畫
+		if anims.Idle then
+			anims.Idle:Play()
+		end
+		
+		-- 儲存動畫引用到 NPC 上
+		local animsFolder = Instance.new("Folder")
+		animsFolder.Name = "TeacherAnims"
+		animsFolder.Parent = npc
+		
+		for emotion, animTrack in pairs(anims) do
+			local track = Instance.new("ObjectValue")
+			track.Name = emotion
+			track.Value = animTrack
+			track.Parent = animsFolder
+		end
 	end
 	npc:PivotTo(CFrame.new(position))
 	
@@ -164,6 +324,46 @@ local function spawnTeacher(position, parent)
 	
 	npc.Parent = parent
 	return npc
+end
+
+-- 老師情緒動畫
+local function playTeacherEmotion(teacher, emotion)
+	if not teacher then return end
+	
+	local animsFolder = teacher:FindFirstChild("TeacherAnims")
+	if not animsFolder then return end
+	
+	local animTrack = animsFolder:FindFirstChild(emotion)
+	if not animTrack or not animTrack.Value then return end
+	
+	-- 停止當前動畫，播放新動畫
+	local track = animTrack.Value
+	
+	-- 停止所有動畫
+	local humanoid = teacher:FindFirstChild("Humanoid")
+	if humanoid then
+		for _, t in ipairs(humanoid:GetPlayingAnimationTracks()) do
+			t:Stop()
+		end
+	end
+	
+	-- 播放新動畫
+	track:Play()
+	
+	-- 如果是情緒動畫，播放後回到待機 (走路動畫持續播放)
+	if emotion == "Angry" or emotion == "Happy" then
+		task.delay(2, function()
+			if teacher and teacher.Parent then
+				local idleTrack = animsFolder:FindFirstChild("Idle")
+				if idleTrack and idleTrack.Value then
+					track:Stop()
+					idleTrack.Value:Play()
+				end
+			end
+		end)
+	elseif emotion == "Walk" then
+		-- 走路動畫會持續播放直到被其他動畫覆蓋
+	end
 end
 
 -- 處理玩家跌倒與自動起身
@@ -197,22 +397,51 @@ local function playSound(soundId, parent)
 end
 
 local function startGame()
-	if isGameRunning or startingGame then return end -- 防止重複執行
+	logger:info("========== startGame 被呼叫 ==========")
+	logger:info("isGameRunning=" .. tostring(isGameRunning) .. " | startingGame=" .. tostring(startingGame))
+	
+	if isGameRunning or startingGame then 
+		logger:warn("遊戲已在進行中，跳過")
+		return 
+	end
+	
 	startingGame = true
 	isGameRunning = true
-	prompt.Enabled = false -- 遊戲中禁止加入
 	
-	print(">>> [SERVER] 多人遊戲開始！玩家人數:", #lobbyPlayers)
+	logger:info("Lobby 人數: " .. #lobbyPlayers)
 	
-	-- 1. 建立地圖 (位置設在遠處，避免與大廳重疊)
-	local gameOffset = Vector3.new(10000, 2000, 10000) -- 移得更遠，避免干擾單人房 UI
+	-- 禁用所有等級區域的 prompt
+	for _, zone in ipairs(levelZones) do
+		local prompt = zone:FindFirstChild("InteractPrompt")
+		if prompt then 
+			prompt.Enabled = false
+			logger:debug("禁用區域: " .. zone.Name)
+		end
+	end
+	if multiplayerZone then
+		local prompt = multiplayerZone:FindFirstChild("InteractPrompt")
+		if prompt then 
+			prompt.Enabled = false
+			logger:debug("禁用區域: MultiplayerZone")
+		end
+	end
+	
+	logger:info("遊戲開始！等級: " .. currentWordLevel .. " | 人數: " .. #lobbyPlayers)
+	
+	-- 1. 建立地圖 (根據不同等級放在不同位置，避免重疊)
+	local levelOffset = (currentWordLevel - 1000) / 1000 -- 0 for 1000, 1 for 2000, etc.
+	local gameOffset = Vector3.new(
+		10000 + (levelOffset * 500), -- X 軸根據等級偏移
+		2000, 
+		10000
+	)
 	currentClassroom = createClassroom(gameOffset)
 	
-	-- 2. 傳送玩家
+		-- 2. 傳送玩家 (範圍縮小)
 	for i, player in ipairs(lobbyPlayers) do
 		if player.Character then
-			-- 隨機分散傳送
-			local spawnPos = gameOffset + Vector3.new(math.random(-20, 20), 5, math.random(-20, 20))
+			-- 隨機分散傳送 (範圍從 20 改為 25)
+			local spawnPos = gameOffset + Vector3.new(math.random(-25, 25), 5, math.random(-25, 25))
 			player.Character:PivotTo(CFrame.new(spawnPos))
 		end
 	end
@@ -232,7 +461,11 @@ local function startGame()
 				if isCorrect then
 					-- 答對：獲勝！
 					print(">>> [SERVER] 玩家 " .. player.Name .. " 答對獲勝！")
-					playSound("rbxassetid://131886985", isYesPad and padYes or padNo) -- Correct sound
+					-- 直接播放音效到玩家身上
+					playSound("rbxassetid://131886985", player)
+					
+					-- 老師開心動畫
+					playTeacherEmotion(currentTeacher, "Happy")
 					
 					gameLoopActive = false -- 停止本回合
 					
@@ -254,11 +487,14 @@ local function startGame()
 				else
 					-- 答錯：自己跌倒
 					handlePlayerFall(player)
+					-- 老師生氣動畫
+					playTeacherEmotion(currentTeacher, "Angry")
+					
 					-- 增加擊飛效果
 					local root = char:FindFirstChild("HumanoidRootPart")
 					if root then root.AssemblyLinearVelocity = Vector3.new(0, 50, 0) end
 					
-					playSound("rbxassetid://130972023", isYesPad and padYes or padNo) -- Wrong sound
+					playSound("rbxassetid://130972023", player) -- Wrong sound
 					-- 可以考慮扣分或擊飛
 				end
 			end
@@ -270,13 +506,19 @@ local function startGame()
 	if padYes then padYes.Touched:Connect(function(hit) onPadTouched(hit, true) end) end
 	if padNo then padNo.Touched:Connect(function(hit) onPadTouched(hit, false) end) end
 
-	-- 3. 生成老師
-	currentTeacher = spawnTeacher(gameOffset + Vector3.new(0, 5, -40), currentClassroom)
+	-- 3. 生成老師 (位置調整為 smaller classroom)
+	currentTeacher = spawnTeacher(gameOffset + Vector3.new(0, 5, -25), currentClassroom)
 	
-	-- 4. 啟動老師 AI (追逐最近玩家)
+	-- 4. 啟動老師 AI (追逐最近玩家 + Idle 徘徊)
 	task.spawn(function()
 		local humanoid = currentTeacher:WaitForChild("Humanoid")
 		local root = currentTeacher:WaitForChild("HumanoidRootPart")
+		
+		-- 老師講台位置 (待機時徘徊的範圍) - 調整為 smaller classroom
+		local podiumPos = gameOffset + Vector3.new(0, 5, -25)
+		local isChasing = false
+		local CHASE_DISTANCE = 20 -- 超過這個距離就停止追逐，開始徘徊 (縮小)
+		local IDLE_WANDER_RANGE = 10 -- 待機徘徊範圍 (縮小)
 		
 		-- 攻擊判定
 		root.Touched:Connect(function(hit)
@@ -287,6 +529,8 @@ local function startGame()
 				local pRoot = char:FindFirstChild("HumanoidRootPart")
 				if hum and pRoot and not hum.Sit then
 					handlePlayerFall(player) -- 跌倒並自動起身
+					playTeacherEmotion(currentTeacher, "Angry") -- 老師攻擊時生氣
+					
 					-- 擊飛效果
 					local dir = (pRoot.Position - root.Position).Unit
 					pRoot.AssemblyLinearVelocity = dir * 60 + Vector3.new(0, 30, 0)
@@ -298,6 +542,7 @@ local function startGame()
 			local target = nil
 			local minDist = math.huge
 			
+			-- 尋找最近的玩家
 			for _, player in ipairs(lobbyPlayers) do
 				if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
 					local pRoot = player.Character.HumanoidRootPart
@@ -309,9 +554,35 @@ local function startGame()
 				end
 			end
 			
-			if target then
+			-- 決定行為：追逐或徘徊
+			if target and minDist < CHASE_DISTANCE then
+				-- 玩家在追逐範圍內，追逐玩家
+				if not isChasing then
+					isChasing = true
+					-- 切換到走路動畫
+					playTeacherEmotion(currentTeacher, "Walk")
+				end
 				humanoid:MoveTo(target.Position)
+			else
+				-- 玩家距離太遠或沒有玩家，進行待機徘徊
+				if isChasing or not isChasing then
+					isChasing = false
+					-- 切換到待機動畫
+					playTeacherEmotion(currentTeacher, "Idle")
+				end
+				
+				-- 隨機選擇一個徘徊目標點 (講台附近)
+				local wanderX = podiumPos.X + math.random(-IDLE_WANDER_RANGE, IDLE_WANDER_RANGE)
+				local wanderZ = podiumPos.Z + math.random(-IDLE_WANDER_RANGE, IDLE_WANDER_RANGE)
+				local wanderPos = Vector3.new(wanderX, podiumPos.Y, wanderZ)
+				
+				humanoid:MoveTo(wanderPos)
+				
+				-- 等待到達目標或一段時間
+				humanoid.MoveToFinished:Wait()
+				task.wait(math.random(1, 3)) -- 等待 1-3 秒再移動
 			end
+			
 			task.wait(0.2) -- 每 0.2 秒更新一次目標
 		end
 	end)
@@ -342,18 +613,83 @@ local function startGame()
 	-- 遊戲結束清理
 	isGameRunning = false
 	startingGame = false
-	if currentClassroom then currentClassroom:Destroy() end
 	
-	-- 傳送回大廳
+	logger:info("========== 遊戲結束，清理中... ==========")
+	
+	-- 先治療所有玩家，確保他們活著
 	for _, player in ipairs(lobbyPlayers) do
 		if player.Character then
-			player.Character:PivotTo(multiplayerZone.CFrame * CFrame.new(0, 3, 0))
+			local hum = player.Character:FindFirstChild("Humanoid")
+			if hum then
+				hum.Health = hum.MaxHealth
+				hum.Sit = false
+				hum.PlatformStand = false
+			end
 		end
 	end
 	
+	-- 找到玩家應該回去的區域
+	local targetZone = nil
+	for _, zone in ipairs(levelZones) do
+		if zone:GetAttribute("WordLevel") == currentWordLevel then
+			targetZone = zone
+			break
+		end
+	end
+	
+	-- 如果沒有找到對應的區域，嘗試找任意一個等級區域
+	if not targetZone and #levelZones > 0 then
+		targetZone = levelZones[1]
+		logger:warn("找不到對應等級區域，使用第一個可用的區域")
+	end
+	
+	-- 傳送所有玩家
+	for _, player in ipairs(lobbyPlayers) do
+		if player.Character then
+			if targetZone then
+				player.Character:PivotTo(targetZone.CFrame * CFrame.new(0, 5, 0))
+				logger:info("玩家 " .. player.Name .. " 傳送回: " .. targetZone.Name)
+			elseif multiplayerZone then
+				player.Character:PivotTo(multiplayerZone.CFrame * CFrame.new(0, 5, 0))
+				logger:info("玩家 " .. player.Name .. " 傳送回 MultiplayerZone")
+			else
+				-- 最後手段：回到大廳原點上方
+				player.Character:PivotTo(CFrame.new(0, 50, 0))
+				warn(">>> [SERVER] 找不到任何區域，回到原點")
+			end
+		end
+	end
+	
+	-- 等待玩家傳送完成
+	task.wait(1)
+	
+	-- 銷毀教室
+	if currentClassroom then 
+		currentClassroom:Destroy() 
+		currentClassroom = nil
+		logger:info("教室已銷毀")
+	end
+	
 	lobbyPlayers = {} -- 清空大廳
-	prompt.Enabled = true
-	print(">>> [SERVER] 多人遊戲結束，大廳已重置。")
+	logger:info("Lobby 已清空")
+	
+	-- 重新啟用所有等級區域的 prompt
+	for _, zone in ipairs(levelZones) do
+		local p = zone:FindFirstChild("InteractPrompt")
+		if p then 
+			p.Enabled = true
+			logger:debug("啟用區域: " .. zone.Name)
+		end
+	end
+	if multiplayerZone then
+		local p = multiplayerZone:FindFirstChild("InteractPrompt")
+		if p then 
+			p.Enabled = true
+			logger:debug("啟用區域: MultiplayerZone")
+		end
+	end
+	
+	logger:info("========== 遊戲結束，大廳已重置 ==========")
 end
 
 local function startIntermission()
@@ -362,49 +698,92 @@ local function startIntermission()
 	
 	print(">>> [SERVER] 倒數計時開始...")
 	
+	-- 發送倒數事件給所有大廳玩家
 	for i = INTERMISSION_TIME, 1, -1 do
 		-- 再次檢查人數與遊戲狀態，防止重複觸發
 		if #lobbyPlayers < MIN_PLAYERS or isGameRunning then
 			print(">>> [SERVER] 人數不足，倒數取消。")
 			countdownActive = false
+			-- 通知玩家倒數取消
+			countdownRemote:FireAllClients("Countdown", 0)
 			return
 		end
-		-- 這裡未來可以用 BillboardGui 或 Hint 顯示倒數給玩家看
+		
+		-- 發送倒數給客戶端顯示
+		countdownRemote:FireAllClients("Countdown", i)
 		print(">>> [SERVER] 多人遊戲即將開始: " .. i)
 		task.wait(1)
 	end
 	
 	if not isGameRunning and not startingGame and #lobbyPlayers >= MIN_PLAYERS then
 		countdownActive = false
+		-- 發送遊戲開始訊號
+		countdownRemote:FireAllClients("Countdown", -1) -- -1 表示開始
 		startGame()
 	end
 end
 
-local function onPromptTriggered(player)
-	print(">>> [SERVER] 收到加入請求: " .. player.Name)
+local function onPromptTriggered(player, selectedLevel: number?)
+	logger:info("========== onPromptTriggered 被呼叫 ==========")
+	logger:info("玩家: " .. tostring(player) .. " | 選擇等級: " .. tostring(selectedLevel))
+	
+	-- 如果有指定等級，使用該等級
+	if selectedLevel then
+		currentWordLevel = selectedLevel
+		logger:info("設定 currentWordLevel = " .. tostring(selectedLevel))
+	end
+	
+	logger:info("isGameRunning = " .. tostring(isGameRunning) .. " | startingGame = " .. tostring(startingGame))
+	
 	if isGameRunning or startingGame then 
-		print(">>> [SERVER] 遊戲進行中，拒絕加入")
+		logger:warn("遊戲正在進行中，拒絕加入")
 		return 
 	end
 	
 	-- 避免重複加入
 	if table.find(lobbyPlayers, player) then 
-		print(">>> [SERVER] 玩家已在大廳中")
+		logger:warn("玩家已在 Lobby 中: " .. player.Name)
 		return 
 	end
 	
 	table.insert(lobbyPlayers, player)
-	print(string.format(">>> [SERVER] %s 加入了多人大廳 (%d/%d)", player.Name, #lobbyPlayers, MIN_PLAYERS))
+	logger:info("玩家加入 Lobby: " .. player.Name .. " | 等級: " .. tostring(currentWordLevel) .. " | 人數: " .. #lobbyPlayers .. "/" .. MIN_PLAYERS)
 	
-	-- 將玩家傳送到等待區 (紅色區域上方)，作為視覺回饋
+	-- 將玩家傳送到等待區 (區域上方)，作為視覺回饋
 	if player.Character then
-		player.Character:PivotTo(multiplayerZone.CFrame * CFrame.new(0, 3, 0))
+		-- 找到觸發的區域位置
+		local triggerZone = nil
+		for _, zone in ipairs(levelZones) do
+			if zone:GetAttribute("WordLevel") == currentWordLevel then
+				triggerZone = zone
+				break
+			end
+		end
+		
+		if triggerZone then
+			logger:info("傳送到區域: " .. triggerZone.Name)
+			player.Character:PivotTo(triggerZone.CFrame * CFrame.new(0, 3, 0))
+		elseif multiplayerZone then
+			logger:info("傳送到舊多人區域")
+			player.Character:PivotTo(multiplayerZone.CFrame * CFrame.new(0, 3, 0))
+		else
+			logger:warn("找不到任何區域來傳送玩家！")
+		end
+	else
+		logger:warn("玩家沒有 Character，無法傳送")
 	end
 	
 	-- 嘗試開始倒數
+	logger:info("檢查是否開始倒數: #lobbyPlayers=" .. #lobbyPlayers .. " | countdownActive=" .. tostring(countdownActive))
+	
 	if #lobbyPlayers >= MIN_PLAYERS and not countdownActive then
+		logger:info("✅ 條件滿足，開始倒數！")
 		startIntermission()
+	else
+		logger:info("等待更多玩家... 需要 " .. MIN_PLAYERS .. " 人，目前 " .. #lobbyPlayers .. " 人")
 	end
+	
+	logger:info("========== onPromptTriggered 結束 ==========")
 end
 
 local function onPlayerRemoving(player)
@@ -415,7 +794,125 @@ local function onPlayerRemoving(player)
 	end
 end
 
-prompt.Triggered:Connect(onPromptTriggered)
-Players.PlayerRemoving:Connect(onPlayerRemoving)
+-- 綁定所有等級區域的觸發事件
+local function bindZonePrompts()
+	logger:info("========== 開始綁定區域 ==========")
+	
+	-- 等待區域準備好 (最多等 15 秒)
+	logger:info("等待等級區域創建... (最多等 15 秒)")
+	
+	local maxWait = 15
+	local waited = 0
+	while #levelZones < 5 and waited < maxWait do
+		task.wait(1)
+		waited += 1
+		logger:debug("第 " .. waited .. " 秒檢查: 已找到 " .. #levelZones .. " 個區域")
+		
+		-- 嘗試再次尋找
+		for i = 1000, 5000, 1000 do
+			local zoneName = "LevelZone_" .. i
+			local exists = false
+			for _, z in ipairs(levelZones) do
+				if z.Name == zoneName then
+					exists = true
+					break
+				end
+			end
+			if not exists then
+				local zone = Workspace:FindFirstChild(zoneName)
+				if zone then
+					table.insert(levelZones, zone)
+					logger:info("✅ [延遲找到] 區域: " .. zoneName .. " | WordLevel=" .. tostring(zone:GetAttribute("WordLevel")))
+				end
+			end
+		end
+	end
+	
+	logger:info("========== 綁定結果 ==========")
+	logger:info("最終找到 " .. #levelZones .. " 個等級區域")
+	
+	-- 列出所有找到的區域
+	for idx, zone in ipairs(levelZones) do
+		local level = zone:GetAttribute("WordLevel") or "nil"
+		local prompt = zone:FindFirstChild("InteractPrompt")
+		local hasPrompt = prompt ~= nil
+		logger:info("  [" .. idx .. "] " .. zone.Name .. " | Level=" .. tostring(level) .. " | HasPrompt=" .. tostring(hasPrompt))
+	end
+	
+	-- 綁定新的等級區域
+	logger:info("開始綁定 Prompt 事件...")
+	
+	if #levelZones == 0 then
+		logger:error("❌ 沒有找到任何等級區域！請檢查 MapSetup.server.luau 是否正確執行")
+	end
+	
+	for _, zone in ipairs(levelZones) do
+		local prompt = zone:FindFirstChild("InteractPrompt")
+		if prompt then
+			local level = zone:GetAttribute("WordLevel") or 1000
+			logger:info("  → 嘗試綁定: " .. zone.Name .. " (Level " .. level .. ")")
+			
+			prompt.Triggered:Connect(function(player)
+				logger:logAction("ZONE_TRIGGERED", player.Name .. " triggered " .. zone.Name .. " (Level " .. level .. ")")
+				onPromptTriggered(player, level)
+			end)
+			logger:info("  ✅ 綁定成功: " .. zone.Name)
+		else
+			logger:warn("  ❌ 找不到 InteractPrompt: " .. zone.Name)
+		end
+	end
+	
+	-- 如果有舊的多人區域，也綁定
+	if multiplayerZone then
+		logger:info("→ 嘗試綁定舊的多人區域: MultiplayerZone")
+		local prompt = multiplayerZone:FindFirstChild("InteractPrompt")
+		if prompt then
+			prompt.Triggered:Connect(function(player)
+				logger:logAction("ZONE_TRIGGERED", player.Name .. " triggered MultiplayerZone")
+				onPromptTriggered(player, currentWordLevel)
+			end)
+			logger:info("  ✅ 綁定成功: MultiplayerZone")
+		else
+			logger:warn("  ❌ 找不到 InteractPrompt: MultiplayerZone")
+		end
+	else
+		logger:warn("沒有舊的多人區域需要綁定 (這是正常的)")
+	end
+	
+	logger:info("========== 綁定完成 ==========")
+end
 
-print("✅ [SERVER] MultiplayerManager 已啟動，等待玩家加入...")
+bindZonePrompts()
+
+Players.PlayerRemoving:Connect(function(player)
+	local idx = table.find(lobbyPlayers, player)
+	if idx then
+		table.remove(lobbyPlayers, idx)
+		logger:info("玩家離開 Lobby: " .. player.Name .. " | 剩餘人數: " .. #lobbyPlayers)
+	end
+end)
+
+-- 處理玩家選擇單字級別
+countdownRemote.OnServerEvent:Connect(function(player, action, data)
+	logger:debug("收到 RemoteEvent: " .. action .. " | " .. tostring(data))
+	
+	if action == "SetWordLevel" then
+		local level = tonumber(data)
+		if level and (level == 1000 or level == 2000 or level == 3000 or level == 4000 or level == 5000) then
+			currentWordLevel = level
+			logger:info("玩家設定等級: " .. player.Name .. " → Level " .. level)
+		end
+	elseif action == "SetDifficulty" then
+		local diff = tonumber(data)
+		if diff == nil or diff == 1 or diff == 2 or diff == 3 then
+			currentDifficulty = diff
+			local diffName = diff == 1 and "Easy" or diff == 2 and "Medium" or diff == 3 and "Hard" or "全部"
+			logger:info("玩家設定難度: " .. player.Name .. " → " .. diffName)
+		end
+	end
+end)
+
+logger:info("========================================")
+logger:info("✅ MultiplayerManager 啟動完成！")
+logger:info("等待玩家進入各等級區域...")
+logger:info("========================================")
