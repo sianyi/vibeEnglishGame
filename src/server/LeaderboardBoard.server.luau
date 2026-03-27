@@ -64,14 +64,14 @@ uiListLayout.Padding = UDim.new(0, 5)
 uiListLayout.Parent = listContainer
 
 -- 輔助函數：建立一行資料
-local function createRow(rank, name, winRate, gold)
+local function createRow(rank, name, wins, winRate, gold)
 	local row = Instance.new("Frame")
 	row.Size = UDim2.new(1, 0, 0, 50)
 	row.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
 	row.BorderSizePixel = 0
-	
-	local text = string.format("%d. %s | 勝率: %.1f%% | 💰 %d", rank, name, winRate, gold)
-	
+
+	local text = string.format("%d. %s | 🏆 %d勝 | %.1f%% | 💰 %d", rank, name, wins, winRate, gold)
+
 	local label = Instance.new("TextLabel")
 	label.Size = UDim2.new(1, -20, 1, 0)
 	label.Position = UDim2.new(0, 10, 0, 0)
@@ -108,29 +108,29 @@ local function updateBoard()
 		local ls = player:FindFirstChild("leaderstats")
 		if ls then
 			local gold = ls:FindFirstChild("Gold") and ls.Gold.Value or 0
+			local wins = ls:FindFirstChild("Wins") and ls.Wins.Value or 0
 			local totalCorrect = ls:FindFirstChild("TotalCorrect") and ls.TotalCorrect.Value or 0
 			local totalAnswered = ls:FindFirstChild("TotalAnswered") and ls.TotalAnswered.Value or 0
-			
+
 			local winRate = 0
 			if totalAnswered > 0 then
 				winRate = (totalCorrect / totalAnswered) * 100
 			end
-			
-			table.insert(data, {name = player.Name, winRate = winRate, gold = gold})
+
+			table.insert(data, {name = player.Name, wins = wins, winRate = winRate, gold = gold})
 		end
 	end
 
-	-- 排序：勝率高者優先，若勝率相同則比金幣
+	-- 排序：勝場多者優先，勝場相同比勝率，再比金幣
 	table.sort(data, function(a, b)
-		if math.abs(a.winRate - b.winRate) > 0.1 then
-			return a.winRate > b.winRate
-		end
+		if a.wins ~= b.wins then return a.wins > b.wins end
+		if math.abs(a.winRate - b.winRate) > 0.1 then return a.winRate > b.winRate end
 		return a.gold > b.gold
 	end)
 
 	-- 顯示
 	for i, entry in ipairs(data) do
-		local row = createRow(i, entry.name, entry.winRate, entry.gold)
+		local row = createRow(i, entry.name, entry.wins, entry.winRate, entry.gold)
 		row.Parent = listContainer
 	end
 end

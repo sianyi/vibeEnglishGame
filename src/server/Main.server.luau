@@ -27,6 +27,11 @@ local function onPlayerAdded(player)
 	totalAnswered.Name = "TotalAnswered"
 	totalAnswered.Value = 0
 	totalAnswered.Parent = leaderstats
+
+	local wins = Instance.new("IntValue")
+	wins.Name = "Wins"
+	wins.Value = 0
+	wins.Parent = leaderstats
 end
 
 Players.PlayerAdded:Connect(onPlayerAdded)

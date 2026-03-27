@@ -321,7 +321,23 @@ local function spawnTeacher(position, parent)
 			part.Anchored = false
 		end
 	end
-	
+
+	-- 老師外觀：正裝配色（藍色上衣、黑色褲子、膚色頭手）
+	for _, part in ipairs(npc:GetDescendants()) do
+		if part:IsA("BasePart") then
+			local n = part.Name
+			if n == "Head" then
+				part.BrickColor = BrickColor.new("Light orange")
+			elseif n == "Torso" or n == "UpperTorso" then
+				part.BrickColor = BrickColor.new("Bright blue")
+			elseif n:find("Arm") or n:find("Hand") then
+				part.BrickColor = BrickColor.new("Light orange")
+			elseif n:find("Leg") or n:find("Foot") then
+				part.BrickColor = BrickColor.new("Black")
+			end
+		end
+	end
+
 	npc.Parent = parent
 	return npc
 end
@@ -461,23 +477,21 @@ local function startGame()
 				if isCorrect then
 					-- 答對：獲勝！
 					print(">>> [SERVER] 玩家 " .. player.Name .. " 答對獲勝！")
-					-- 直接播放音效到玩家身上
 					playSound("rbxassetid://131886985", player)
-					
-					-- 老師開心動畫
 					playTeacherEmotion(currentTeacher, "Happy")
-					
-					gameLoopActive = false -- 停止本回合
-					
-					-- 更新 UI
+					gameLoopActive = false
+
 					for _, lbl in ipairs(questionLabels) do lbl.Text = player.Name .. " 獲勝！" end
-					
-					-- 給予獎勵 (這裡簡單加 50 金幣)
+
+					-- 更新 leaderstats
 					local ls = player:FindFirstChild("leaderstats")
-					if ls and ls:FindFirstChild("Gold") then
-						ls.Gold.Value += 50
+					if ls then
+						if ls:FindFirstChild("Gold") then ls.Gold.Value += 50 end
+						if ls:FindFirstChild("Wins") then ls.Wins.Value += 1 end
+						if ls:FindFirstChild("TotalCorrect") then ls.TotalCorrect.Value += 1 end
+						if ls:FindFirstChild("TotalAnswered") then ls.TotalAnswered.Value += 1 end
 					end
-					
+
 					-- 其他玩家跌倒
 					for _, otherP in ipairs(lobbyPlayers) do
 						if otherP ~= player and otherP.Character then
@@ -487,15 +501,18 @@ local function startGame()
 				else
 					-- 答錯：自己跌倒
 					handlePlayerFall(player)
-					-- 老師生氣動畫
 					playTeacherEmotion(currentTeacher, "Angry")
-					
-					-- 增加擊飛效果
+
 					local root = char:FindFirstChild("HumanoidRootPart")
 					if root then root.AssemblyLinearVelocity = Vector3.new(0, 50, 0) end
-					
-					playSound("rbxassetid://130972023", player) -- Wrong sound
-					-- 可以考慮扣分或擊飛
+
+					playSound("rbxassetid://130972023", player)
+
+					-- 答錯也記錄 TotalAnswered
+					local ls = player:FindFirstChild("leaderstats")
+					if ls and ls:FindFirstChild("TotalAnswered") then
+						ls.TotalAnswered.Value += 1
+					end
 				end
 			end
 		end
@@ -513,13 +530,13 @@ local function startGame()
 	task.spawn(function()
 		local humanoid = currentTeacher:WaitForChild("Humanoid")
 		local root = currentTeacher:WaitForChild("HumanoidRootPart")
-		
-		-- 老師講台位置 (待機時徘徊的範圍) - 調整為 smaller classroom
+
 		local podiumPos = gameOffset + Vector3.new(0, 5, -25)
 		local isChasing = false
-		local CHASE_DISTANCE = 20 -- 超過這個距離就停止追逐，開始徘徊 (縮小)
-		local IDLE_WANDER_RANGE = 10 -- 待機徘徊範圍 (縮小)
-		
+		local CHASE_DISTANCE = 65 -- 教室 60x60，讓老師在整個教室內都能追到玩家
+		local IDLE_WANDER_RANGE = 10
+		local wanderTimer = 0 -- 倒數計時器，到 0 時才換下一個徘徊目標
+
 		-- 攻擊判定
 		root.Touched:Connect(function(hit)
 			local char = hit.Parent
@@ -528,20 +545,18 @@ local function startGame()
 				local hum = char:FindFirstChild("Humanoid")
 				local pRoot = char:FindFirstChild("HumanoidRootPart")
 				if hum and pRoot and not hum.Sit then
-					handlePlayerFall(player) -- 跌倒並自動起身
-					playTeacherEmotion(currentTeacher, "Angry") -- 老師攻擊時生氣
-					
-					-- 擊飛效果
+					handlePlayerFall(player)
+					playTeacherEmotion(currentTeacher, "Angry")
 					local dir = (pRoot.Position - root.Position).Unit
 					pRoot.AssemblyLinearVelocity = dir * 60 + Vector3.new(0, 30, 0)
 				end
 			end
 		end)
-		
+
 		while isGameRunning and currentTeacher and currentTeacher.Parent do
 			local target = nil
 			local minDist = math.huge
-			
+
 			-- 尋找最近的玩家
 			for _, player in ipairs(lobbyPlayers) do
 				if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
@@ -553,43 +568,36 @@ local function startGame()
 					end
 				end
 			end
-			
-			-- 決定行為：追逐或徘徊
+
 			if target and minDist < CHASE_DISTANCE then
-				-- 玩家在追逐範圍內，追逐玩家
+				-- 追逐模式
 				if not isChasing then
 					isChasing = true
-					-- 切換到走路動畫
 					playTeacherEmotion(currentTeacher, "Walk")
 				end
 				humanoid:MoveTo(target.Position)
 			else
-				-- 玩家距離太遠或沒有玩家，進行待機徘徊
-				if isChasing or not isChasing then
+				-- 徘徊模式（每隔 wanderTimer 換目標，不阻塞主迴圈）
+				if isChasing then
 					isChasing = false
-					-- 切換到待機動畫
 					playTeacherEmotion(currentTeacher, "Idle")
+					wanderTimer = 0 -- 立即換一個徘徊目標
 				end
-				
-				-- 隨機選擇一個徘徊目標點 (講台附近)
-				local wanderX = podiumPos.X + math.random(-IDLE_WANDER_RANGE, IDLE_WANDER_RANGE)
-				local wanderZ = podiumPos.Z + math.random(-IDLE_WANDER_RANGE, IDLE_WANDER_RANGE)
-				local wanderPos = Vector3.new(wanderX, podiumPos.Y, wanderZ)
-				
-				humanoid:MoveTo(wanderPos)
-				
-				-- 等待到達目標或一段時間
-				humanoid.MoveToFinished:Wait()
-				task.wait(math.random(1, 3)) -- 等待 1-3 秒再移動
+				wanderTimer -= 0.2
+				if wanderTimer <= 0 then
+					local wanderX = podiumPos.X + math.random(-IDLE_WANDER_RANGE, IDLE_WANDER_RANGE)
+					local wanderZ = podiumPos.Z + math.random(-IDLE_WANDER_RANGE, IDLE_WANDER_RANGE)
+					humanoid:MoveTo(Vector3.new(wanderX, podiumPos.Y, wanderZ))
+					wanderTimer = math.random(3, 6)
+				end
 			end
-			
-			task.wait(0.2) -- 每 0.2 秒更新一次目標
+
+			task.wait(0.2)
 		end
 	end)
 	
 	-- 5. 遊戲主迴圈 (出題 -> 等待 -> 結算)
-	-- 這裡示範 3 回合
-	for round = 1, 3 do
+	for round = 1, 10 do
 		if #lobbyPlayers == 0 then break end
 		
 		-- 出題
@@ -879,12 +887,12 @@ local function bindZonePrompts()
 		logger:warn("沒有舊的多人區域需要綁定 (這是正常的)")
 	end
 	
-	-- DevTest hook（BindableFunction，供 DevTest.server.luau 呼叫）
-	local devTrigger = Instance.new("BindableFunction")
+	-- DevTest hook（BindableEvent，fire-and-forget 非阻塞）
+	local devTrigger = Instance.new("BindableEvent")
 	devTrigger.Name = "DevTriggerGame"
-	devTrigger.OnInvoke = function(player, level) task.spawn(onPromptTriggered, player, level) end
+	devTrigger.Event:Connect(function(player, level) task.spawn(onPromptTriggered, player, level) end)
 	devTrigger.Parent = ServerScriptService
-	logger:info("✅ DevTriggerGame BindableFunction 已建立")
+	logger:info("✅ DevTriggerGame BindableEvent 已建立")
 
 	logger:info("========== 綁定完成 ==========")
 end
