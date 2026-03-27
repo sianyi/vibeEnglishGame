@@ -38,3 +38,4 @@
 1. 讀 `TODO.md`（尤其是「🔥 下次對話立即執行」區塊）
 2. 讀 `AI_CONTEXT.md` 了解架構細節
 3. 確認 MCP 已連線（工具列表中有 `mcp__Roblox_Studio__*`）
+<!-- test push Fri Mar 27 08:09:47     2026 -->
