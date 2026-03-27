@@ -879,6 +879,13 @@ local function bindZonePrompts()
 		logger:warn("沒有舊的多人區域需要綁定 (這是正常的)")
 	end
 	
+	-- DevTest hook（BindableFunction，供 DevTest.server.luau 呼叫）
+	local devTrigger = Instance.new("BindableFunction")
+	devTrigger.Name = "DevTriggerGame"
+	devTrigger.OnInvoke = function(player, level) task.spawn(onPromptTriggered, player, level) end
+	devTrigger.Parent = ServerScriptService
+	logger:info("✅ DevTriggerGame BindableFunction 已建立")
+
 	logger:info("========== 綁定完成 ==========")
 end
 

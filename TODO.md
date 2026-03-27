@@ -2,6 +2,53 @@
 
 > **Note for AI Agent**: Always refer to `AI_CONTEXT.md` for architecture, tech stack, and coding conventions before implementing features.
 
+---
+
+## 🔥 下次對話立即執行（重開後先看這裡）
+
+**背景：** MCP 遷移 + 驗證已於 2026-03-27 全部完成。所有 src/ 腳本已用 `mcp__Roblox_Studio__run_code` 寫入 Studio（不再使用 rojo serve）。DevTest 驗證通過，DEV_MODE = "OFF"。
+
+**下一步：** 見 Task C 下方的待辦清單（UI、Audio、Leaderboards）。
+
+### ✅ Task A：MCP 遷移（已完成 2026-03-27）
+
+| Studio 位置 | 腳本 |
+|-------------|------|
+| ReplicatedStorage > Shared | GameLogger, Hello, Logger, QuestionData, WordList |
+| ServerScriptService | Main, MapSetup, MultiplayerManager, WordGameServer, DevTest, LeaderboardBoard, WordService |
+| StarterPlayerScripts > Client | Client, GoldDisplay, LobbyMusic, WordGame, GameSession, CountdownUI, LevelSelectionUI |
+
+### ✅ Task B：DevTest DEV_MODE（已完成 2026-03-27）
+
+`DEV_MODE` 字串 flag（在 ServerScriptService > DevTest）：
+- `"OFF"` = 停用（預設）
+- `"PLAYER"` = Studio 手動玩家測試
+- `"MCP"` = MCP 自動測試（自動觸發關卡 + 答題）
+
+MultiplayerManager 啟動時會自動建立 `DevTriggerGame` BindableFunction 供 DevTest 呼叫。
+
+### ✅ Task C：驗證（已完成 2026-03-27）
+
+1. ✅ PLAYER 模式：5 個等級區域全部找到，QuestionData 載入，Client 連線正常，無錯誤
+2. ✅ MCP 模式：3 場自動測試全部正常結束（教室建立→答題→清理），DevTriggerGame BindableEvent 正常運作
+3. ✅ DEV_MODE 已重設為 `"OFF"`（Studio + `src/server/DevTest.server.luau`）
+
+**關鍵修復（本次對話）：**
+- `DevTriggerGame`：BindableFunction → **BindableEvent**（解決 `Invoke` 阻塞 DevTest 問題）
+- `devTrigger:Invoke()` → `devTrigger:Fire()`（在 DevTest）
+- classroom 等待逾時：`waited < 15` → `waited < 50`（避免遊戲還在跑就超時）
+- 以上修復已同步至 `src/server/DevTest.server.luau` 和 `src/server/MultiplayerManager.server.luau`
+
+### 🔥 下次對話立即執行
+
+**所有 Task A/B/C 均已完成！** 下一步建議：
+
+- [ ] **Backlog UI**：改善黑板的 SurfaceGui 視覺效果（`src/client/LevelSelectionUI.luau`）
+- [ ] **Audio**：加入 Lo-fi 背景音樂（`src/client/LobbyMusic.client.luau`）
+- [ ] **Leaderboards**：全球排行榜（`src/server/LeaderboardBoard.server.luau` 已佔位）
+
+---
+
 ## 🎯 Project Goal
 Create a Roblox "Vibe" style social word trivia game. Players answer questions from a Teacher NPC by moving to YES/NO zones in independent or multiplayer classrooms.
 

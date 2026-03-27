@@ -1,164 +1,212 @@
 --!strict
 -- QuestionData.luau
--- 管理遊戲內的單字題庫與分類
+-- 從 VocabTrainer API 動態載入單字題庫 (10,844 個單字，A1~C2)
+
+local HttpService = game:GetService("HttpService")
 
 export type Question = {
 	Word: string,
-	Definition: string, -- 中文翻譯
-	IsCorrect: boolean, -- 用於產生陷阱題，例如 "Apple: 香蕉" (False)
+	Definition: string,
+	IsCorrect: boolean,
 	Difficulty: number, -- 1: Easy, 2: Medium, 3: Hard
-	Level: number, -- 單字級別: 1000, 2000, 3000, 4000, 5000
+	Level: number,      -- 1000, 2000, 3000, 4000, 5000
 }
 
-export type WordLevel = 1000 | 2000 | 3000 | 4000 | 5000
-export type Difficulty = 1 | 2 | 3 -- 1: Easy, 2: Medium, 3: Hard
+export type WordLevel = number  -- 1000, 2000, 3000, 4000, or 5000
+export type Difficulty = number -- 1, 2, or 3
 
 local QuestionData = {}
 
--- 單字資料庫 (未来可以从外部 JSON 导入)
--- Level: 1000-5000 最常用單字
--- Difficulty: 1=Easy(常見單字), 2=Medium(中等), 3=Hard(較難)
-local database: {Question} = {
-	-- Level 1000 (基礎單字)
-	{ Word = "Apple", Definition = "蘋果", IsCorrect = true, Difficulty = 1, Level = 1000 },
-	{ Word = "Banana", Definition = "葡萄", IsCorrect = false, Difficulty = 1, Level = 1000 },
-	{ Word = "Book", Definition = "書", IsCorrect = true, Difficulty = 1, Level = 1000 },
-	{ Word = "Car", Definition = "車", IsCorrect = true, Difficulty = 1, Level = 1000 },
-	{ Word = "Cat", Definition = "狗", IsCorrect = false, Difficulty = 1, Level = 1000 },
-	{ Word = "Dog", Definition = "狗", IsCorrect = true, Difficulty = 1, Level = 1000 },
-	{ Word = "House", Definition = "房子", IsCorrect = true, Difficulty = 1, Level = 1000 },
-	{ Word = "Water", Definition = "水", IsCorrect = true, Difficulty = 1, Level = 1000 },
-	{ Word = "Food", Definition = "食物", IsCorrect = true, Difficulty = 1, Level = 1000 },
-	{ Word = "Tree", Definition = "樹", IsCorrect = true, Difficulty = 1, Level = 1000 },
-	
-	-- Level 2000 (进阶单字)
-	{ Word = "Computer", Definition = "電腦", IsCorrect = true, Difficulty = 1, Level = 2000 },
-	{ Word = "Television", Definition = "電視", IsCorrect = true, Difficulty = 1, Level = 2000 },
-	{ Word = "Restaurant", Definition = "餐廳", IsCorrect = true, Difficulty = 2, Level = 2000 },
-	{ Word = "Hospital", Definition = "醫院", IsCorrect = true, Difficulty = 1, Level = 2000 },
-	{ Word = "Beautiful", Definition = "醜的", IsCorrect = false, Difficulty = 2, Level = 2000 },
-	{ Word = "Important", Definition = "重要", IsCorrect = true, Difficulty = 2, Level = 2000 },
-	{ Word = "Different", Definition = "相同", IsCorrect = false, Difficulty = 2, Level = 2000 },
-	{ Word = "Complete", Definition = "完成", IsCorrect = true, Difficulty = 2, Level = 2000 },
-	{ Word = "Experience", Definition = "經驗", IsCorrect = true, Difficulty = 2, Level = 2000 },
-	{ Word = "Remember", Definition = "忘記", IsCorrect = false, Difficulty = 2, Level = 2000 },
-	
-	-- Level 3000 (中高级单字)
-	{ Word = "Algorithm", Definition = "演算法", IsCorrect = true, Difficulty = 2, Level = 3000 },
-	{ Word = "Function", Definition = "功能", IsCorrect = true, Difficulty = 2, Level = 3000 },
-	{ Word = "Variable", Definition = "變數", IsCorrect = true, Difficulty = 2, Level = 3000 },
-	{ Word = "Database", Definition = "資料庫", IsCorrect = true, Difficulty = 3, Level = 3000 },
-	{ Word = "Network", Definition = "網路", IsCorrect = true, Difficulty = 2, Level = 3000 },
-	{ Word = "Software", Definition = "硬體", IsCorrect = false, Difficulty = 2, Level = 3000 },
-	{ Word = "Password", Definition = "密碼", IsCorrect = true, Difficulty = 2, Level = 3000 },
-	{ Word = "Download", Definition = "下載", IsCorrect = true, Difficulty = 2, Level = 3000 },
-	{ Word = "Upload", Definition = "上傳", IsCorrect = true, Difficulty = 2, Level = 3000 },
-	{ Word = "Browser", Definition = "瀏覽器", IsCorrect = true, Difficulty = 2, Level = 3000 },
-	
-	-- Level 4000 (高级单字)
-	{ Word = "Polymorphism", Definition = "多型", IsCorrect = true, Difficulty = 3, Level = 4000 },
-	{ Word = "Encapsulation", Definition = "封裝", IsCorrect = true, Difficulty = 3, Level = 4000 },
-	{ Word = "Inheritance", Definition = "繼承", IsCorrect = true, Difficulty = 3, Level = 4000 },
-	{ Word = "Concurrency", Definition = "並發", IsCorrect = true, Difficulty = 3, Level = 4000 },
-	{ Word = "Asynchronous", Definition = "同步", IsCorrect = false, Difficulty = 3, Level = 4000 },
-	{ Word = "Encryption", Definition = "加密", IsCorrect = true, Difficulty = 3, Level = 4000 },
-	{ Word = "Firewall", Definition = "防火牆", IsCorrect = true, Difficulty = 3, Level = 4000 },
-	{ Word = "Algorithm", Definition = "演算法", IsCorrect = true, Difficulty = 3, Level = 4000 },
-	{ Word = "Compiler", Definition = "直譯器", IsCorrect = false, Difficulty = 3, Level = 4000 },
-	{ Word = "Debugger", Definition = "除錯器", IsCorrect = true, Difficulty = 3, Level = 4000 },
-	
-	-- Level 5000 (专业/学术单字)
-	{ Word = "Ephemeral", Definition = "永恆的", IsCorrect = false, Difficulty = 3, Level = 5000 },
-	{ Word = "Ubiquitous", Definition = "普遍的", IsCorrect = true, Difficulty = 3, Level = 5000 },
-	{ Word = "Paradigm", Definition = "典範", IsCorrect = true, Difficulty = 3, Level = 5000 },
-	{ Word = "Syntactic", Definition = "語意的", IsCorrect = false, Difficulty = 3, Level = 5000 },
-	{ Word = "Semantics", Definition = "語義學", IsCorrect = true, Difficulty = 3, Level = 5000 },
-	{ Word = "Heterogeneous", Definition = "同質的", IsCorrect = false, Difficulty = 3, Level = 5000 },
-	{ Word = "Idempotent", Definition = "冪等", IsCorrect = true, Difficulty = 3, Level = 5000 },
-	{ Word = "Latency", Definition = "延遲", IsCorrect = true, Difficulty = 3, Level = 5000 },
-	{ Word = "Throughput", Definition = "吞吐量", IsCorrect = true, Difficulty = 3, Level = 5000 },
-	{ Word = "Scalability", Definition = "可擴展性", IsCorrect = true, Difficulty = 3, Level = 5000 },
+local BASE_URL = "https://vocab.kubahuang.synology.me"
+local token: string? = nil
+
+-- game Level → API difficulty range (1=A1 … 6=C2)
+local LEVEL_TO_DIFF: {[number]: {min: number, max: number}} = {
+	[1000] = { min = 1, max = 2 }, -- A1~A2
+	[2000] = { min = 2, max = 3 }, -- A2~B1
+	[3000] = { min = 3, max = 4 }, -- B1~B2
+	[4000] = { min = 4, max = 5 }, -- B2~C1
+	[5000] = { min = 5, max = 6 }, -- C1~C2
 }
+
+-- game Difficulty (1/2/3) → API difficulty range
+local GAME_DIFF_TO_API: {[number]: {min: number, max: number}} = {
+	[1] = { min = 1, max = 2 },
+	[2] = { min = 3, max = 4 },
+	[3] = { min = 5, max = 6 },
+}
+
+-- API cefr level (1~6) → game Level
+local CEFR_TO_LEVEL: {[number]: number} = {
+	[1] = 1000,
+	[2] = 2000,
+	[3] = 3000,
+	[4] = 4000,
+	[5] = 5000,
+	[6] = 5000,
+}
+
+-- API cefr level (1~6) → game Difficulty (1/2/3)
+local CEFR_TO_DIFFICULTY: {[number]: number} = {
+	[1] = 1, [2] = 1,
+	[3] = 2, [4] = 2,
+	[5] = 3, [6] = 3,
+}
+
+-- 靜態後備題庫（API 不可用時）
+local FALLBACK: {Question} = {
+	{ Word = "Hello",    Definition = "你好",   IsCorrect = true,  Difficulty = 1, Level = 1000 },
+	{ Word = "Computer", Definition = "電腦",   IsCorrect = true,  Difficulty = 1, Level = 2000 },
+	{ Word = "Ephemeral",Definition = "永恆的", IsCorrect = false, Difficulty = 3, Level = 5000 },
+}
+
+local function login(): boolean
+	local ok, res = pcall(function()
+		return HttpService:RequestAsync({
+			Url    = BASE_URL .. "/api/auth/login",
+			Method = "POST",
+			Headers = { ["Content-Type"] = "application/x-www-form-urlencoded" },
+			Body   = "username=guest&password=",
+		})
+	end)
+	if ok and res.StatusCode == 200 then
+		local data = HttpService:JSONDecode(res.Body)
+		token = data.access_token
+		return true
+	end
+	warn("[QuestionData] 登入失敗")
+	return false
+end
+
+local function fetchFromAPI(diffMin: number, diffMax: number, count: number): {Question}
+	if not token then
+		if not login() then return {} end
+	end
+
+	local url = string.format(
+		"%s/api/quiz/questions?difficulty_min=%d&difficulty_max=%d&count=%d&mode=random",
+		BASE_URL, diffMin, diffMax, count
+	)
+
+	local ok, res = pcall(function()
+		return HttpService:RequestAsync({
+			Url    = url,
+			Method = "GET",
+			Headers = { Authorization = "Bearer " .. (token :: string) },
+		})
+	end)
+
+	if not ok then
+		warn("[QuestionData] 請求失敗")
+		return {}
+	end
+
+	-- Token 過期，重新登入一次
+	if res.StatusCode == 401 then
+		if not login() then return {} end
+		ok, res = pcall(function()
+			return HttpService:RequestAsync({
+				Url    = url,
+				Method = "GET",
+				Headers = { Authorization = "Bearer " .. (token :: string) },
+			})
+		end)
+		if not ok or res.StatusCode ~= 200 then return {} end
+	end
+
+	if res.StatusCode ~= 200 then return {} end
+
+	local data = HttpService:JSONDecode(res.Body)
+	local questions: {Question} = {}
+
+	for _, q in ipairs(data.questions) do
+		local cefrNum: number = (q.level :: number?) or 3
+		local gameLevel = CEFR_TO_LEVEL[cefrNum] or 3000
+		local gameDiff  = CEFR_TO_DIFFICULTY[cefrNum] or 2
+
+		-- 50% 顯示正確答案、50% 顯示錯誤選項，製造判斷題效果
+		local isCorrect = (math.random(0, 1) == 1)
+		local displayDef: string
+
+		if isCorrect then
+			displayDef = q.correct_answer :: string
+		else
+			local wrong: {string} = {}
+			for _, opt in ipairs(q.options :: {string}) do
+				if opt ~= q.correct_answer then
+					table.insert(wrong, opt)
+				end
+			end
+			if #wrong > 0 then
+				displayDef = wrong[math.random(1, #wrong)]
+			else
+				displayDef = q.correct_answer :: string
+				isCorrect  = true
+			end
+		end
+
+		table.insert(questions, {
+			Word       = q.word :: string,
+			Definition = displayDef,
+			IsCorrect  = isCorrect,
+			Difficulty = gameDiff,
+			Level      = gameLevel,
+		})
+	end
+
+	return questions
+end
 
 -- 取得隨機題目
 function QuestionData.GetRandomQuestion(difficultyLevel: number?, wordLevel: number?): Question
-	local pool = {}
-	
-	for _, q in ipairs(database) do
-		local matchesDifficulty = (difficultyLevel == nil or q.Difficulty == difficultyLevel)
-		local matchesLevel = (wordLevel == nil or q.Level == wordLevel)
-		
-		if matchesDifficulty and matchesLevel then
-			table.insert(pool, q)
-		end
-	end
-
-	-- 如果沒有符合的題目，回傳任意題目避免錯誤
-	if #pool == 0 then
-		pool = database
-	end
-
-	return pool[math.random(1, #pool)]
+	local questions = QuestionData.GetQuestions(1, difficultyLevel, wordLevel)
+	return questions[1]
 end
 
 -- 取得多個題目
 function QuestionData.GetQuestions(count: number, difficultyLevel: number?, wordLevel: number?): {Question}
-	local questions = {}
-	local pool = {}
-	
-	-- 建立候選池
-	for _, q in ipairs(database) do
-		local matchesDifficulty = (difficultyLevel == nil or q.Difficulty == difficultyLevel)
-		local matchesLevel = (wordLevel == nil or q.Level == wordLevel)
-		
-		if matchesDifficulty and matchesLevel then
-			table.insert(pool, q)
+	local diffMin, diffMax = 1, 6
+
+	if wordLevel then
+		local range = LEVEL_TO_DIFF[wordLevel]
+		if range then
+			diffMin = range.min
+			diffMax = range.max
+		end
+	elseif difficultyLevel then
+		local range = GAME_DIFF_TO_API[difficultyLevel]
+		if range then
+			diffMin = range.min
+			diffMax = range.max
 		end
 	end
-	
-	-- 如果沒有符合的題目，使用全部
-	if #pool == 0 then
-		pool = database
+
+	local questions = fetchFromAPI(diffMin, diffMax, count)
+
+	if #questions == 0 then
+		warn("[QuestionData] API 無回應，使用後備題庫")
+		return { FALLBACK[math.random(1, #FALLBACK)] }
 	end
-	
-	-- 隨機選取不重複的題目
-	for i = 1, math.min(count, #pool) do
-		local idx = math.random(1, #pool)
-		table.insert(questions, table.remove(pool, idx))
-	end
-	
+
 	return questions
 end
 
 -- 取得所有可用的單字級別
 function QuestionData.GetAvailableLevels(): {number}
-	local levels = {}
-	local seen = {}
-	
-	for _, q in ipairs(database) do
-		if not seen[q.Level] then
-			seen[q.Level] = true
-			table.insert(levels, q.Level)
-		end
-	end
-	
-	table.sort(levels)
-	return levels
+	return {1000, 2000, 3000, 4000, 5000}
 end
 
--- 取得該級別的題目數量
+-- 取得該級別的題目數量（API 統計數字）
 function QuestionData.GetQuestionCount(wordLevel: number?): number
-	if wordLevel == nil then
-		return #database
-	end
-	
-	local count = 0
-	for _, q in ipairs(database) do
-		if q.Level == wordLevel then
-			count += 1
-		end
-	end
-	return count
+	if wordLevel == nil then return 10844 end
+	local counts: {[number]: number} = {
+		[1000] = 732,
+		[2000] = 1002,
+		[3000] = 4630,
+		[4000] = 3093,
+		[5000] = 1387,
+	}
+	return counts[wordLevel] or 0
 end
 
 return QuestionData
