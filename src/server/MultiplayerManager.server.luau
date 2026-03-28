@@ -499,14 +499,25 @@ local function startGame()
 						end
 					end
 				else
-					-- 答錯：自己跌倒
-					handlePlayerFall(player)
-					playTeacherEmotion(currentTeacher, "Angry")
-
-					local root = char:FindFirstChild("HumanoidRootPart")
-					if root then root.AssemblyLinearVelocity = Vector3.new(0, 50, 0) end
-
-					playSound("rbxassetid://130972023", player)
+					-- 答錯：先檢查甩鍋器
+					-- 🎯 甩鍋器
+					local blame = player:GetAttribute("Item_Blame") or 0
+					if blame > 0 then
+						player:SetAttribute("Item_Blame", blame - 1)
+						local victims = {}
+						for _, p in ipairs(lobbyPlayers) do if p ~= player then table.insert(victims, p) end end
+						local victim = #victims > 0 and victims[math.random(#victims)] or player
+						handlePlayerFall(victim)
+						playTeacherEmotion(currentTeacher, "Angry")
+						playSound("rbxassetid://130972023", player)
+						countdownRemote:FireClient(player, "ItemUsed", "Blame")
+					else
+						handlePlayerFall(player)
+						playTeacherEmotion(currentTeacher, "Angry")
+						local root = char:FindFirstChild("HumanoidRootPart")
+						if root then root.AssemblyLinearVelocity = Vector3.new(0, 50, 0) end
+						playSound("rbxassetid://130972023", player)
+					end
 
 					-- 答錯也記錄 TotalAnswered
 					local ls = player:FindFirstChild("leaderstats")
@@ -545,10 +556,17 @@ local function startGame()
 				local hum = char:FindFirstChild("Humanoid")
 				local pRoot = char:FindFirstChild("HumanoidRootPart")
 				if hum and pRoot and not hum.Sit then
-					handlePlayerFall(player)
-					playTeacherEmotion(currentTeacher, "Angry")
-					local dir = (pRoot.Position - root.Position).Unit
-					pRoot.AssemblyLinearVelocity = dir * 60 + Vector3.new(0, 30, 0)
+					-- 🛡️ 無敵盾
+					local shield = player:GetAttribute("Item_Shield") or 0
+					if shield > 0 then
+						player:SetAttribute("Item_Shield", shield - 1)
+						countdownRemote:FireClient(player, "ItemUsed", "Shield")
+					else
+						handlePlayerFall(player)
+						playTeacherEmotion(currentTeacher, "Angry")
+						local dir = (pRoot.Position - root.Position).Unit
+						pRoot.AssemblyLinearVelocity = dir * 60 + Vector3.new(0, 30, 0)
+					end
 				end
 			end
 		end)
@@ -604,6 +622,14 @@ local function startGame()
 		currentWordData = getNewQuestion()
 		local qText = string.format("第 %d 題\n%s\n=\n%s ?", round, currentWordData.en, currentWordData.displayCn)
 		for _, lbl in ipairs(questionLabels) do lbl.Text = qText end
+		-- 📖 作弊器：發送答案提示給持有者
+		for _, p in ipairs(lobbyPlayers) do
+			local cheat = p:GetAttribute("Item_Cheat") or 0
+			if cheat > 0 then
+				p:SetAttribute("Item_Cheat", cheat - 1)
+				countdownRemote:FireClient(p, "CheatHint", currentWordData.isCorrect)
+			end
+		end
 		
 		gameLoopActive = true
 		
